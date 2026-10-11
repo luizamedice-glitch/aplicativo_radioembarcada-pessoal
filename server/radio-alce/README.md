@@ -4,7 +4,7 @@ R2 → providers Python → programação/cache persistente → Liquidsoap → I
 
 ## Programação
 
-`config.py` centraliza URLs públicas, intervalos, ganhos e retenção. O sincronizador consulta `music_catalog.json` e `programming.json` a cada 60 s, valida e salva snapshots atomicamente. Falhas preservam a última configuração válida. Uma versão nova reconstrói bags na próxima seleção; itens já entregues ao decoder terminam normalmente. Não é necessário rebuild do APK ou restart para atualizar os pools. Quantidades são dinâmicas (na consulta desta implementação: catálogo versão 3, 74 músicas; programação versão 5, oito vinhetas e três jingles).
+`config.py` centraliza URLs públicas, intervalos, ganhos e retenção. O sincronizador consulta `music_catalog.json` e `programming.json` a cada 60 s, valida e salva snapshots atomicamente. Falhas preservam a última configuração válida. Uma versão nova reconstrói bags na próxima seleção; itens já entregues ao decoder terminam normalmente. Não é necessário rebuild do APK ou restart para atualizar os pools. Quantidades são dinâmicas (na consulta desta implementação: catálogo versão 4, 46 músicas; programação versão 5, oito vinhetas e três jingles).
 
 `ProgrammingEngine` mantém **MUSIC → STATION_ID → MUSIC → STATION_ID → MUSIC → JINGLE → MUSIC**, repetidamente. Bags independentes usam todos os itens antes de reciclar e não repetem o último na fronteira dos bags. O jingle substitui a vinheta. O campo legado `songsBetweenInsertions` não significa três músicas sem inserção; `INSERTION_PATTERN` documenta a regra atual.
 

@@ -74,7 +74,7 @@ fun RadioPlayerScreen(
 @Composable
 fun AlceLogoHeader(radioName: String, modifier: Modifier = Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
-        Image(painterResource(R.drawable.alce_logo), contentDescription = "Logo Alce — $radioName",
+        Image(painterResource(R.drawable.radio_alce_media), contentDescription = "Logo Alce — $radioName",
             modifier = Modifier.widthIn(max = 390.dp).fillMaxSize().testTag("alce-logo"), contentScale = ContentScale.Fit)
     }
 }

@@ -418,3 +418,17 @@ normalizados sem diferenciar maiúsculas/minúsculas e espaços nas bordas; arqu
 sem artista identificável não são agrupados como um artista fictício. O catálogo
 precisa fornecer artistas corretos para que essa proteção possa ser aplicada.
 Vinhetas, jingles e notícias não consomem o histórico de artistas.
+
+### Atualização visual e biblioteca — outubro de 2026
+
+O player usa a nova imagem oficial Rádio Alce, com proporção preservada, tanto na
+tela principal quanto na arte da MediaSession/notificação. O ícone do aplicativo
+permanece separado. A reprodução e os controles não foram alterados.
+
+O workflow existente `Sincronizar catálogo R2` foi executado após a limpeza da
+biblioteca: `music_catalog.json` passou para a versão 4, com 46 músicas (28 entradas
+removidas). Ele usa a listagem real de objetos `music/`, preserva IDs/metadados e
+incrementa a versão. Após novas exclusões no bucket, executar esse mesmo workflow.
+O servidor consulta o catálogo a cada 60 segundos; itens já preparados podem
+terminar antes de a nova seleção refletir a biblioteca atual. Atualizar o catálogo
+não exige novo APK ou alterações em `programming.json`.

@@ -61,7 +61,10 @@ jobs:
           python3 server/radio-alce/tests/validate_audio_pipeline.py
           ALCE_TEST_EMERGENCY=1 python3 server/radio-alce/tests/validate_runtime.py
       - name: Unit tests
-        run: ./gradlew test testDebugUnitTest -PplaybackMode=STREAM --warning-mode all --max-workers=2
+        # Run resource-dependent variants separately; both suites remain required.
+        run: |
+          ./gradlew testDebugUnitTest -PplaybackMode=STREAM --warning-mode all --max-workers=2
+          ./gradlew testReleaseUnitTest -PplaybackMode=STREAM --warning-mode all --max-workers=2
       - name: Android lint
         run: ./gradlew lintDebug -PplaybackMode=STREAM --warning-mode all --max-workers=2
       - name: Assemble debug APK
