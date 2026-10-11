@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.drawable.AdaptiveIconDrawable
 import br.com.radioembarcada.R
 import java.io.File
@@ -29,11 +30,44 @@ class RadioIdentityTest {
         val resources = RuntimeEnvironment.getApplication().resources
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeResource(resources, R.drawable.radio_alce_media, options)
-        assertEquals(1280, options.outWidth)
-        assertEquals(1280, options.outHeight)
+        assertEquals(1254, options.outWidth)
+        assertEquals(1254, options.outHeight)
         BitmapFactory.decodeResource(resources, R.drawable.radio_alce_brand, options)
         assertEquals(1280, options.outWidth)
         assertEquals(1170, options.outHeight)
+    }
+    @Test fun screenLogoHasTransparentBackgroundAndUsesMostOfItsCanvas() {
+        val resources = RuntimeEnvironment.getApplication().resources
+        val logo = BitmapFactory.decodeResource(resources, R.drawable.radio_alce_logo)
+        assertTrue(logo.hasAlpha())
+        listOf(0 to 0, logo.width - 1 to 0, 0 to logo.height - 1).forEach { (x, y) ->
+            assertEquals(0, Color.alpha(logo.getPixel(x, y)))
+        }
+        // The logo is tightly framed for the app, unlike the system artwork.
+        var occupiedRows = 0
+        for (y in 0 until logo.height) {
+            if ((0 until logo.width).any { x -> Color.alpha(logo.getPixel(x, y)) > 128 }) occupiedRows++
+        }
+        assertTrue(occupiedRows > logo.height * .8f)
+    }
+    @Test fun nativeArtworkKeepsWholeLogoInsideHorizontalThreeToOneCrop() {
+        val art = BitmapFactory.decodeResource(RuntimeEnvironment.getApplication().resources, R.drawable.radio_alce_media)
+        val cropHeight = art.width / 3
+        val top = (art.height - cropHeight) / 2
+        var visiblePixels = 0
+        for (y in 0 until art.height) for (x in 0 until art.width) {
+            val pixel = art.getPixel(x, y)
+            if (maxOf(Color.red(pixel), Color.green(pixel), Color.blue(pixel)) > 40) {
+                visiblePixels++
+                assertTrue("Visible logo cropped at ($x,$y)", y >= top && y < top + cropHeight)
+            }
+        }
+        assertTrue("Artwork must contain a visible logo", visiblePixels > 10_000)
+        val preview = Bitmap.createBitmap(art, 0, top, art.width, cropHeight)
+        File("build/reports/ui/native-artwork-3-to-1.png").also { file ->
+            file.parentFile?.mkdirs()
+            file.outputStream().use { preview.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
     }
     @Test fun launcherUsesRadioAlceLabelAndOfficialLogoAdaptiveIcon() {
         val context = RuntimeEnvironment.getApplication()

@@ -56,7 +56,15 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
     buildTypes.getByName("debug").buildConfigField("long", "NEWS_INTERVAL_DEBUG", "${newsIntervalDebugMinutes * 60_000}L")
-    testOptions { unitTests.isIncludeAndroidResources = true }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            // Robolectric parcels artwork bitmaps in the session tests; the default
+            // 512 MiB worker exhausted its heap on the GitHub Ubuntu runner.
+            it.maxHeapSize = "1g"
+            it.maxParallelForks = 1
+        }
+    }
     if (!useLocalMusic) sourceSets.getByName("main").assets.setSrcDirs(
         listOf(layout.buildDirectory.dir("generated/remoteAssets")))
     // Permite ler metadados via AssetFileDescriptor e buscar posições sem descompactar MP3.

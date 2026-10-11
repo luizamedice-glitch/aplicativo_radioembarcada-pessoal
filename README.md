@@ -363,8 +363,10 @@ inclusive na saída Bluetooth quando suportado pelo aparelho. Não alteram o gan
 interno dos fades, nem adicionam Next/Previous/Seek aos controles da sessão.
 
 O player nativo, notificação e tela bloqueada recebem o título fixo **Rádio Alce - AO VIVO**
-e a imagem quadrada enviada em `drawable-nodpi/radio_alce_media.jpg` (1280 × 1280),
-com margem ao redor do logo para reduzir cortes. O ícone adaptativo continua usando
+e a arte quadrada `drawable-nodpi/radio_alce_media.jpg` (1254 × 1254),
+com o logo central ocupando aproximadamente 29% da altura e 31% da largura.
+O respiro vertical de aproximadamente 35% por lado preserva o desenho completo
+em uma simulação de recorte central horizontal até 3:1. O ícone adaptativo continua usando
 `radio_alce_brand.jpg`; a imagem e o layout principal permanecem separados.
 A arte é um recurso local carregável pelo Media3 sem internet; o Android decide como
 renderizá-la no fundo/cartão do sistema. Capas fornecidas pelo catálogo ou embutidas
@@ -372,6 +374,16 @@ nos MP3 não são encaminhadas à sessão. Títulos/artistas continuam nos Progr
 internos para a programação e anti-repetição; o crédito da fonte das notícias permanece.
 O extractor Media3 desabilita metadados ID3 de apresentação, preservando a leitura
 de delay/padding gapless e os créditos da fonte das notícias.
+
+Não existe dimensão universal em pixels para o cartão horizontal nativo. A
+[documentação Android](https://developer.android.com/media/implement/surfaces/mobile)
+define a entrega da arte via metadados, enquanto o SystemUI/fabricante determina
+o tamanho, escala, sobreposição de controles e recorte do painel. A dimensão
+1254 × 1254 é uma escolha deste asset, não uma exigência do Android. A margem
+reduz cortes, mas precisa ser conferida no aparelho, especialmente em cartões
+mais largos que 3:1. A imagem ficará menor em superfícies quadradas, como Auto.
+O teste `nativeArtworkKeepsWholeLogoInsideHorizontalThreeToOneCrop` verifica
+a área visível e gera `app/build/reports/ui/native-artwork-3-to-1.png`.
 
 A janela de repetição é `ProgrammingConfiguration.MUSIC_REPEAT_BLOCK_WINDOW` (**6 h**).
 `PlaybackHistoryRepository` grava um checkpoint JSON privado por tenant em
@@ -421,9 +433,11 @@ Vinhetas, jingles e notícias não consomem o histórico de artistas.
 
 ### Atualização visual e biblioteca — outubro de 2026
 
-O player usa a nova imagem oficial Rádio Alce, com proporção preservada, tanto na
-tela principal quanto na arte da MediaSession/notificação. O ícone do aplicativo
-permanece separado. A reprodução e os controles não foram alterados.
+O player usa duas apresentações do logo Rádio Alce: `radio_alce_logo.png`,
+transparente e com enquadramento próximo para ficar maior na tela principal,
+e `radio_alce_media.jpg`, com amplo respiro para o player nativo horizontal.
+A tela usa `ContentScale.Fit`, dimensões adaptativas e limite de largura de 420 dp.
+O ícone do aplicativo permanece separado. A reprodução e os controles não foram alterados.
 
 O workflow existente `Sincronizar catálogo R2` foi executado após a limpeza da
 biblioteca: `music_catalog.json` passou para a versão 4, com 46 músicas (28 entradas
