@@ -1,0 +1,99 @@
+{
+  "stationId": "alce",
+  "version": 6,
+  "rules": {
+    "songsBetweenInsertions": 3,
+    "alternateInsertionTypes": true,
+    "neverCombineInsertions": true,
+    "jingleSelection": "SHUFFLE_BAG",
+    "stationIdSelection": "SHUFFLE_BAG"
+  },
+  "stationIds": [
+    {
+      "id": "vinheta-alce-1",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 1",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce1_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-2",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 2",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce2_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-3",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 3",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce3_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-4",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 4",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce4_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-5",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 5",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce5_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-6",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 6",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce6_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-7",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 7",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce7_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-8",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 8",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce8_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-nova-3",
+      "type": "STATION_ID",
+      "title": "Vinheta Nova 3",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Nova3_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-nova-4",
+      "type": "STATION_ID",
+      "title": "Vinheta Nova 4",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta-Nova4_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-nova-5",
+      "type": "STATION_ID",
+      "title": "Vinheta Nova 5",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta-nova5_Masterizada.mp3"
+    }
+  ],
+  "jingles": [
+    {
+      "id": "jingle-mobilidade-simples",
+      "type": "JINGLE",
+      "title": "Mobilidade Simples",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Mobilidade-Simples-ajustada.mp3"
+    },
+    {
+      "id": "jingle-tarifa-fixa",
+      "type": "JINGLE",
+      "title": "Tarifa Fixa no Alce",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Tarifa-Fixa-no-Alce-master-estereo.mp3"
+    },
+    {
+      "id": "jingle-alce",
+      "type": "JINGLE",
+      "title": "Alce App Transporte",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Alce_App_Jingle_30s_Master_Estereo_Final_320kbps.mp3"
+    }
+  ]
+}

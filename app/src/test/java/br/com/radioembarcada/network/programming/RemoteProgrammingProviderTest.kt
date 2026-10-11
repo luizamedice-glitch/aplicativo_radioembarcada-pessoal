@@ -61,6 +61,16 @@ class RemoteProgrammingProviderTest {
         assertEquals(current, store.json)
     }
 
+    @Test fun publishedExpansionLoadsAllElevenStationsAndKeepsThreeJingles() {
+        val parsed = RemoteProgrammingParser.parse(checkNotNull(javaClass.getResource("/programming-v6.json")).readText())
+        assertEquals(6L, parsed.version)
+        assertEquals(11, parsed.stationIds.size)
+        assertEquals(3, parsed.jingles.size)
+        for (id in listOf("vinheta-nova-3", "vinheta-nova-4", "vinheta-nova-5")) {
+            assertEquals(ProgramItemType.STATION_ID, parsed.stationIds.single { it.id == "programming:alce:STATION_ID:$id" }.type)
+        }
+    }
+
     @Test fun publishedSchemaMapsRulesAndBothKindsOfProgramItem() {
         val parsed = RemoteProgrammingParser.parse(fixture())
         assertEquals("alce", parsed.stationId)

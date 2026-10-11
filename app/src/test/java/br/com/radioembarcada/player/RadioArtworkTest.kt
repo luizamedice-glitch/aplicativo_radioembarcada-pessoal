@@ -59,9 +59,9 @@ class RadioArtworkTest {
         val source = androidx.media3.datasource.DefaultDataSource.Factory(context).createDataSource()
         try {
             assertTrue(source.open(androidx.media3.datasource.DataSpec(RadioMediaIdentity(context).artworkUri)) > 0)
-            val header = ByteArray(2)
-            assertEquals(2, source.read(header, 0, 2))
-            assertArrayEquals(byteArrayOf(0xff.toByte(), 0xd8.toByte()), header)
+            val header = ByteArray(8)
+            assertEquals(8, source.read(header, 0, 8))
+            assertArrayEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a), header)
         } finally { source.close() }
     }
     private fun extract(extractor: Mp3Extractor): Format {

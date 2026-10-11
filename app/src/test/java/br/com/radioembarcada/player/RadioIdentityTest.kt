@@ -50,9 +50,9 @@ class RadioIdentityTest {
         }
         assertTrue(occupiedRows > logo.height * .8f)
     }
-    @Test fun nativeArtworkKeepsWholeLogoInsideHorizontalThreeToOneCrop() {
+    @Test fun nativeArtworkKeepsWholeLogoInsideHorizontalNotificationCrop() {
         val art = BitmapFactory.decodeResource(RuntimeEnvironment.getApplication().resources, R.drawable.radio_alce_media)
-        val cropHeight = art.width / 3
+        val cropHeight = (art.width / 2.4f).toInt()
         val top = (art.height - cropHeight) / 2
         var visiblePixels = 0
         for (y in 0 until art.height) for (x in 0 until art.width) {
@@ -64,7 +64,7 @@ class RadioIdentityTest {
         }
         assertTrue("Artwork must contain a visible logo", visiblePixels > 10_000)
         val preview = Bitmap.createBitmap(art, 0, top, art.width, cropHeight)
-        File("build/reports/ui/native-artwork-3-to-1.png").also { file ->
+        File("build/reports/ui/native-artwork-2.4-to-1.png").also { file ->
             file.parentFile?.mkdirs()
             file.outputStream().use { preview.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }

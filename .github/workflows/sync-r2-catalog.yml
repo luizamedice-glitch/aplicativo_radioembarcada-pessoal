@@ -2,6 +2,16 @@ name: Sincronizar catálogo R2
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Catálogo musical ou inclusão das vinhetas aprovadas
+        type: choice
+        default: music
+        options: [music, programming]
+
+concurrency:
+  group: r2-library-publication
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -59,6 +69,7 @@ jobs:
           echo "Acesso ao bucket '$R2_BUCKET': OK"
 
   sync:
+    if: inputs.operation != 'programming'
     name: 3 - Regenerar e publicar catálogo
     needs: r2_access
     runs-on: ubuntu-latest
@@ -134,3 +145,59 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
               out.write(summary + '\n')
           PY
+
+  programming:
+    name: Publicar vinhetas aprovadas
+    if: inputs.operation == 'programming'
+    needs: r2_access
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testar merge e validar arquivos no bucket
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_update_r2_programming.py' -v
+          python3 - <<'PYTHON'
+          import json, os, subprocess
+          from urllib.parse import unquote, urlsplit
+          endpoint = 'https://' + os.environ['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
+          for item in json.load(open('scripts/station-id-additions.json')):
+              result = subprocess.check_output(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'],
+                  '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint])
+              assert json.loads(result)['ContentLength'] > 0
+              print('Audio available: ' + item['id'])
+          PYTHON
+      - name: Baixar configuração atual e guardar backup
+        run: |
+          aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-before.json \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: programming-backup
+          path: /tmp/programming-before.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Mesclar sem alterar regras ou jingles
+        run: |
+          python3 scripts/update_r2_programming.py --current /tmp/programming-before.json \
+            --additions scripts/station-id-additions.json --output /tmp/programming.json
+      - name: Publicar e conferir programação
+        run: |
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-check.json --endpoint-url "$ENDPOINT"
+          cmp /tmp/programming-before.json /tmp/programming-check.json || { echo 'Configuração remota mudou; execute novamente.'; exit 1; }
+          aws s3 cp /tmp/programming.json "s3://${R2_BUCKET}/programming.json" \
+            --content-type 'application/json; charset=utf-8' --cache-control 'no-cache, max-age=0' --endpoint-url "$ENDPOINT"
+          aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-published.json --endpoint-url "$ENDPOINT"
+          cmp /tmp/programming.json /tmp/programming-published.json
+          python3 - <<'PYTHON'
+          import json, os
+          data = json.load(open('/tmp/programming-published.json'))
+          text = f"Programming version {data['version']}: {len(data['stationIds'])} station IDs, {len(data['jingles'])} jingles."
+          print(text)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f: f.write(text + '\n')
+          PYTHON

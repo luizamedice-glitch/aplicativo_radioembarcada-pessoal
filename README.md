@@ -363,10 +363,10 @@ inclusive na saída Bluetooth quando suportado pelo aparelho. Não alteram o gan
 interno dos fades, nem adicionam Next/Previous/Seek aos controles da sessão.
 
 O player nativo, notificação e tela bloqueada recebem o título fixo **Rádio Alce - AO VIVO**
-e a arte quadrada `drawable-nodpi/radio_alce_media.jpg` (1254 × 1254),
-com o logo central ocupando aproximadamente 29% da altura e 31% da largura.
-O respiro vertical de aproximadamente 35% por lado preserva o desenho completo
-em uma simulação de recorte central horizontal até 3:1. O ícone adaptativo continua usando
+e a arte quadrada `drawable-nodpi/radio_alce_media.png` (1254 × 1254),
+com o logo central ocupando aproximadamente 38% da altura e 42% da largura.
+O respiro vertical de aproximadamente 31% por lado preserva o desenho completo
+em uma simulação de recorte central horizontal até 2,4:1. O ícone adaptativo continua usando
 `radio_alce_brand.jpg`; a imagem e o layout principal permanecem separados.
 A arte é um recurso local carregável pelo Media3 sem internet; o Android decide como
 renderizá-la no fundo/cartão do sistema. Capas fornecidas pelo catálogo ou embutidas
@@ -381,9 +381,9 @@ define a entrega da arte via metadados, enquanto o SystemUI/fabricante determina
 o tamanho, escala, sobreposição de controles e recorte do painel. A dimensão
 1254 × 1254 é uma escolha deste asset, não uma exigência do Android. A margem
 reduz cortes, mas precisa ser conferida no aparelho, especialmente em cartões
-mais largos que 3:1. A imagem ficará menor em superfícies quadradas, como Auto.
-O teste `nativeArtworkKeepsWholeLogoInsideHorizontalThreeToOneCrop` verifica
-a área visível e gera `app/build/reports/ui/native-artwork-3-to-1.png`.
+mais largos que 2,4:1. A imagem ficará menor em superfícies quadradas, como Auto.
+O teste `nativeArtworkKeepsWholeLogoInsideHorizontalNotificationCrop` verifica
+a área visível e gera `app/build/reports/ui/native-artwork-2.4-to-1.png`.
 
 A janela de repetição é `ProgrammingConfiguration.MUSIC_REPEAT_BLOCK_WINDOW` (**6 h**).
 `PlaybackHistoryRepository` grava um checkpoint JSON privado por tenant em
@@ -435,7 +435,7 @@ Vinhetas, jingles e notícias não consomem o histórico de artistas.
 
 O player usa duas apresentações do logo Rádio Alce: `radio_alce_logo.png`,
 transparente e com enquadramento próximo para ficar maior na tela principal,
-e `radio_alce_media.jpg`, com amplo respiro para o player nativo horizontal.
+e `radio_alce_media.png`, com amplo respiro para o player nativo horizontal.
 A tela usa `ContentScale.Fit`, dimensões adaptativas e limite de largura de 420 dp.
 O ícone do aplicativo permanece separado. A reprodução e os controles não foram alterados.
 
@@ -446,3 +446,21 @@ incrementa a versão. Após novas exclusões no bucket, executar esse mesmo work
 O servidor consulta o catálogo a cada 60 segundos; itens já preparados podem
 terminar antes de a nova seleção refletir a biblioteca atual. Atualizar o catálogo
 não exige novo APK ou alterações em `programming.json`.
+
+### Inclusão das vinhetas Nova 3, 4 e 5
+
+No workflow existente **Sincronizar catálogo R2**, selecionar `operation=programming`
+para mesclar `scripts/station-id-additions.json` no `programming.json` atual do bucket.
+O job verifica os três objetos MP3, preserva regras/jingles/campos desconhecidos,
+recusa conflitos de ID/URL, incrementa a versão somente quando necessário e salva
+um Artifact `programming-backup` por 30 dias antes da publicação. Reexecutar não
+insere duplicatas. O modo padrão `music` continua sincronizando somente músicas.
+As três inclusões expandem a configuração atual de 8 para 11 STATION_ID; as 3 JINGLE
+permanecem. O servidor já faz refresh da programação sem novo APK.
+A fixture histórica v4 permanece com sete vinhetas; a expansão publicada é testada
+separadamente por `programming-v6.json`.
+
+A arte nativa agora usa PNG sem perdas e logo cerca de 34% maior na altura, mantendo
+margem compatível com o cartão de aproximadamente 2,4:1 mostrado no aparelho.
+O sistema pode reduzir a resolução e aplicar escurecimento; validar a nitidez no
+celular após instalar o novo APK. Não há mudança de layout interno ou playback.
