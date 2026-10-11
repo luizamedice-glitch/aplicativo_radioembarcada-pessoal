@@ -1,6 +1,6 @@
 {
   "stationId": "alce",
-  "version": 4,
+  "version": 5,
   "rules": {
     "songsBetweenInsertions": 3,
     "alternateInsertionTypes": true,
@@ -50,6 +50,24 @@
       "type": "STATION_ID",
       "title": "Vinheta Alce 7",
       "url": "https://example.org/stationIds-6.mp3"
+    },
+    {
+      "id": "vinheta-nova-3",
+      "type": "STATION_ID",
+      "title": "Vinheta Nova 3",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Nova3_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-nova-4",
+      "type": "STATION_ID",
+      "title": "Vinheta Nova 4",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta-Nova4_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-nova-5",
+      "type": "STATION_ID",
+      "title": "Vinheta Nova 5",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta-nova5_Masterizada.mp3"
     }
   ],
   "jingles": [
