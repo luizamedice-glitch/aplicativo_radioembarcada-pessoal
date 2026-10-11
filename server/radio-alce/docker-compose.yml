@@ -1,0 +1,34 @@
+services:
+  icecast:
+    build:
+      context: ./icecast
+    container_name: radio-alce-icecast
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+
+  catalog:
+    build:
+      context: .
+      dockerfile: Dockerfile.catalog
+    container_name: radio-alce-catalog
+    restart: unless-stopped
+    volumes:
+      - radio-data:/data
+
+  liquidsoap:
+    image: savonet/liquidsoap:v2.4.x-latest
+    container_name: radio-alce-liquidsoap
+    restart: unless-stopped
+    depends_on:
+      - icecast
+      - catalog
+    env_file:
+      - .env
+    volumes:
+      - ./liquidsoap/radio.liq:/radio.liq:ro
+      - radio-data:/data
+    command: ["liquidsoap", "/radio.liq"]
+
+volumes:
+  radio-data:
