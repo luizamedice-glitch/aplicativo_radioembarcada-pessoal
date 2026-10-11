@@ -54,12 +54,21 @@ class Planner:
         emergency_snapshot = self.cache.directory.parent / 'emergency.json'
         if emergency_snapshot.exists():
             try:
-                for value in json.loads(emergency_snapshot.read_text()):
-                    from audio_cache import probe
-                    probe(value['path'])
-                    self.emergency.append(value)
+                saved = json.loads(emergency_snapshot.read_text())
+                from audio_cache import probe
+                for value in saved:
+                    path = self._emergency_path(value)
+                    if path is not None:
+                        try:
+                            probe(path)
+                            self.emergency.append(value)
+                        except Exception:
+                            log.warning('EMERGENCY cached audio unavailable; omitted')
             except Exception:
-                log.warning('EMERGENCY snapshot partly unavailable; rebuilding verified pool')
+                log.warning('EMERGENCY snapshot unavailable; rebuilding verified pool')
+        # Migrate an old annotated M3U even when R2 is temporarily unavailable.
+        if self.emergency:
+            self._write_emergency()
         self.restored_emergency = bool(self.emergency)
         self.last_fill = clock()
         self.reset_requested = False
@@ -154,31 +163,73 @@ class Planner:
         if inserts is None:
             insertion = self.engine.insertion(self.catalogs.programming, self.cache.prepare)
             inserts = [insertion] if insertion else []
-        for item in inserts:
-            self._append(item)
-        self._append(following)
+        # Publish the fully prepared block atomically; /next cannot observe a lone insert.
+        with self.lock:
+            for item in inserts:
+                self._append(item)
+            self._append(following)
         self._emergency(following)
         with self.lock:
             protected = [value['item']['path'] for value in list(self.ready) + list(self.delivered.values())]
         self.cache.prune(protected + [item['path'] for item in self.emergency])
         return True
 
+    def _emergency_path(self, item):
+        if not isinstance(item.get('path'), str):
+            return None
+        path = Path(item['path'])
+        if (item.get('type') != 'MUSIC' or not path.is_absolute() or
+                path.suffix.lower() != '.mp3' or any(char in str(path) for char in '\r\n?#')):
+            return None
+        if not path.resolve().is_relative_to(self.cache.directory.resolve()):
+            return None
+        try:
+            return path if path.is_file() and path.stat().st_size > 0 else None
+        except OSError:
+            return None
+
     def _emergency(self, item):
-        self.emergency = [value for value in self.emergency if value['id'] != item['id']] + [item]
+        path = self._emergency_path(item)
+        if path is None:
+            return
+        self.emergency = [value for value in self.emergency
+                          if self._emergency_path(value) not in (None, path)] + [item]
         self.emergency = self.emergency[-3:]
         atomic_json(self.cache.directory.parent / 'emergency.json', self.emergency)
+        self._write_emergency()
+
+    def _write_emergency(self):
         path = self.cache.directory.parent / 'emergency.m3u'
+        # This is a traditional M3U, not a request/metadata transport.
+        paths = list(dict.fromkeys(str(local) for value in self.emergency
+                                   if (local := self._emergency_path(value)) is not None))
+        content = '#EXTM3U\n' + '\n'.join(paths) + '\n'
+        if path.exists() and path.read_text() == content:
+            return
         tmp = path.with_suffix('.tmp')
-        # Liquidsoap continues using a small verified local pool if the planner/R2 is unavailable.
-        tmp.write_text('#EXTM3U\n' + '\n'.join(request_uri(value, 'emergency') for value in self.emergency) + '\n')
+        with tmp.open('w') as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
         tmp.chmod(0o644)
         tmp.replace(path)
+        log.info('EMERGENCY playlist updated: %s tracks', len(paths))
 
     def next(self):
         with self.lock:
             if self.reset_requested or not self.ready:
                 return ''
-            value = self.ready.popleft()
+            while self.ready:
+                value = self.ready.popleft()
+                path = Path(value['item']['path'])
+                try:
+                    if path.is_file() and path.stat().st_size > 0:
+                        break
+                except OSError:
+                    pass
+                log.warning('READY audio disappeared id=%s; skipping unavailable request', value['item']['id'])
+            else:
+                return ''
             self.delivered[value['token']] = value
             return request_uri(value['item'], value['token'])
 
@@ -186,13 +237,8 @@ class Planner:
         with self.lock:
             if self.reset_requested:
                 return
+            # Plain fallback paths have no trustworthy delivery token; never infer plays.
             if token == 'emergency':
-                item = next((item for item in self.emergency if item['id'] == emergency_id), None)
-                if item:
-                    log.warning('EMERGENCY cached MUSIC; normal planner unavailable')
-                    # Preserve current institutional checkpoint, not the speculative planner state.
-                    checkpoint = self.engine.storage.get('programming', self.engine.checkpoint())
-                    self.engine.started(item, checkpoint)
                 return
             value = self.delivered.get(token)
             if value is None or value['sequence'] <= self.started_sequence:

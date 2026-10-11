@@ -38,6 +38,12 @@ jobs:
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
           ./gradlew --version
+      - name: Prepare server audio fixtures
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
       - name: Server programming tests
         run: python3 -m unittest discover -s server/radio-alce/tests -v
       - name: Liquidsoap syntax
@@ -49,6 +55,10 @@ jobs:
             --entrypoint liquidsoap \
             savonet/liquidsoap:v2.4.x-latest@sha256:f19e1ca92320459d5fad5265e0844cc7ae92501d686f788e43ca8a9d6bec44cc \
             --check /scripts/radio.liq
+      - name: Emergency fallback audio integration
+        run: |
+          docker build -t alce-catalog-validation -f server/radio-alce/Dockerfile.catalog server/radio-alce
+          ALCE_TEST_EMERGENCY=1 python3 server/radio-alce/tests/validate_runtime.py
       - name: Unit tests
         run: ./gradlew test testDebugUnitTest -PplaybackMode=STREAM --warning-mode all --max-workers=2
       - name: Android lint

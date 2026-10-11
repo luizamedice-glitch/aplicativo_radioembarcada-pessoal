@@ -6,6 +6,7 @@ Run from any directory: python3 server/radio-alce/tests/validate_runtime.py
 Only generated tones are used; never touches the deployed stream or musical library.
 """
 import concurrent.futures
+import sys
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,9 @@ import tempfile
 import time
 import urllib.request
 import uuid
+import threading
+import array
+import math
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = 'savonet/liquidsoap:v2.4.x-latest@sha256:f19e1ca92320459d5fad5265e0844cc7ae92501d686f788e43ca8a9d6bec44cc'
@@ -58,7 +62,10 @@ class Handler(BaseHTTPRequestHandler):
  def reply(self,body):
   self.send_response(200); self.end_headers(); self.wfile.write(body.encode())
  def do_GET(self):
-  if self.path=='/next': self.reply(planner.next())
+  if self.path=='/next':
+   if Path('/data/planner-unavailable').exists():
+    self.send_response(503); self.end_headers()
+   else: self.reply(planner.next())
   elif self.path=='/events': self.reply(Path('/data/events.jsonl').read_text() if Path('/data/events.jsonl').exists() else '')
   else: self.reply('ok')
  def do_POST(self):
@@ -128,9 +135,56 @@ def main():
             assert isinstance(source,dict), 'Must have exactly one global source'
             def listen():
                 with urllib.request.urlopen(base+'/alce.mp3',timeout=15) as response:
+                    if os.getenv('ALCE_TEST_EMERGENCY')=='1':
+                        chunks=[]
+                        while not capture_stop.is_set(): chunks.append(response.read(8192))
+                        return b''.join(chunks)
                     return response.read(960000 if os.getenv('ALCE_TEST_NEWS')=='1' else 360000)
+            capture_stop=threading.Event()
             with concurrent.futures.ThreadPoolExecutor(2) as executor:
                 futures=[executor.submit(listen) for _ in range(2)]
+                try:
+                    if os.getenv('ALCE_TEST_EMERGENCY')=='1':
+                        def wait_for(predicate, description, limit=50):
+                            deadline=time.monotonic()+limit
+                            while time.monotonic()<deadline:
+                                if predicate(): return
+                                time.sleep(.25)
+                            raise AssertionError(description)
+                        event_path=data/'events.jsonl'
+                        wait_for(lambda: event_path.exists() and len(event_path.read_text().splitlines())>=7,
+                                 'Main program did not play the validated full cycle')
+                        # Stop the whole planner process, not just one mocked method.
+                        docker('pause',tag+'-catalog')
+                        wait_for(lambda: 'EMERGENCY active' in docker('logs',tag+'-liquidsoap'),
+                                 'Fallback never activated after prefetch drained')
+                        time.sleep(6) # Move past the Icecast burst of formerly queued main audio.
+                        with urllib.request.urlopen(base+'/alce.mp3',timeout=15) as response:
+                            sample=response.read(64000)
+                        sample_path=root/'emergency.mp3'; sample_path.write_bytes(sample)
+                        pcm=subprocess.run(['ffmpeg','-v','error','-i',str(sample_path),'-ac','1','-ar','8000',
+                                            '-f','s16le','-'],check=True,capture_output=True).stdout
+                        samples=array.array('h'); samples.frombytes(pcm)
+                        if sys.byteorder!='little': samples.byteswap()
+                        windows=[samples[index:index+800] for index in range(0,len(samples)-799,800)]
+                        rms=[math.sqrt(sum(value*value for value in window)/len(window)) for window in windows]
+                        assert len(rms)>=20 and min(rms)>100, ('Emergency silent 100ms window', rms)
+                        # Restore the same planner; fallback history safety is covered by unit tests.
+                        docker('unpause',tag+'-catalog')
+                        wait_for(lambda: 'EMERGENCY ended / planner resumed' in docker('logs',tag+'-liquidsoap'),
+                                 'Main program failed to resume at a natural boundary')
+                        time.sleep(5)
+                        logs=docker('logs',tag+'-liquidsoap')
+                        assert 'Error while parsing XML playlist' not in logs,logs
+                        assert 'Error while parsing SCPLS playlist' not in logs,logs
+                        assert 'EMERGENCY fallback ready' in logs,logs
+                        print(json.dumps({'emergency_audio_min_rms':round(min(rms)),
+                                          'silent_100ms_windows':0,'planner_resumed':True,
+                                          'playlist_parser_errors':0}))
+                finally:
+                    capture_stop.set()
+                    if os.getenv('ALCE_TEST_EMERGENCY')=='1':
+                        subprocess.run(DOCKER+['unpause',tag+'-catalog'],capture_output=True)
                 captures=[future.result() for future in futures]
             shared = captures[0][100000:140000]
             assert shared in captures[1], 'Listeners must receive the same encoded signal'
@@ -141,6 +195,9 @@ def main():
             assert types[:len(expected)]==expected,types
             gaps=[]
             for current, following in zip(events, events[1:]):
+                if os.getenv('ALCE_TEST_EMERGENCY')=='1':
+                    # HTTP callbacks cannot report timing while their entire process is paused.
+                    continue
                 delta=following['time']-current['time']
                 assert abs(delta-current['duration'])<.25, (current, delta)
                 if current['type'] in ('STATION_ID','JINGLE','NEWS_INTRO','NEWS_DROP'):
@@ -150,8 +207,8 @@ def main():
             subprocess.run(['ffmpeg','-v','error','-xerror','-i',str(root/'capture.mp3'),'-f','null','-'],check=True)
             print(json.dumps({'single_source':True,'listeners':2,'same_encoded_signal':True,
                               'events':len(events),'first_types':types[:len(expected)],
-                              'max_boundary_timing_error_ms':round(max(gaps)*1000),
-                              'short_content_complete':True,'stream_decodes':True},ensure_ascii=False))
+                              'max_boundary_timing_error_ms':round(max(gaps)*1000) if gaps else None,
+                              'short_content_complete':True if gaps else None,'stream_decodes':True},ensure_ascii=False))
         except Exception:
             for name in containers:
                 print(name, docker('logs','--tail','40',name))

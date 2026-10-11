@@ -112,3 +112,49 @@ O workflow **existente** `Android debug` executa testes Python e valida sintaxe 
 Após deploy, ouvir `http://15.229.83.121:8000/alce.mp3` em dois aparelhos simultaneamente: música/vinheta/música/vinheta/música/jingle/música, peças completas, fades suaves, mesma sequência e diferença pequena de buffer. Ouvir também um bloco de 30 min; se terminou fora da tolerância, **não haverá hora**. Testar restart completo com `docker compose restart` e conferir histórico/ciclo persistentes. Para substituir apenas o serviço catalog em manutenção, reiniciar também liquidsoap para descartar reservas de decoder da sessão anterior.
 
 O Codex não possui SSH/SSM da EC2; validações isoladas não comprovam que a nova versão já foi aplicada na produção. Não foi feito cutover remoto.
+
+## Fallback emergency: áudio mesmo sem planner
+
+`emergency.m3u` contém somente `#EXTM3U` e caminhos absolutos de até três
+MP3 musicais já preparados no cache. A publicação é atômica, os caminhos são
+validados, e um snapshot antigo é migrado ao iniciar mesmo sem acesso ao R2.
+Não há `annotate:`, URLs ou tokens nesse arquivo. O Liquidsoap usa explicitamente
+o parser M3U (`audio/x-mpegurl`) e antecipa dois arquivos do fallback.
+
+O ganho/fade editorial é aplicado somente ao ramo principal, antes do `fallback`.
+O emergency usa ganho fixo moderado (0,9), sem envoltória editorial nem dependência
+de metadados/duração. `metadata.map` fornece metadados genéricos até quando o MP3
+não possui tags e limpa explicitamente tokens/ids. Assim, o fallback não herda
+estado da música anterior. Esses metadados não contêm identificação editorial: o fallback **não**
+altera o histórico oficial nem o ciclo. Apenas acknowledgements de deliveries
+válidos do fluxo principal atualizam o estado. O token antigo `emergency` é ignorado.
+
+`request.dynamic` continua antecipando quatro requests; blocos já preparados
+são publicados atomicamente e `/next` pula arquivos que desapareceram. Respostas
+HTTP de erro não viram requests. O fallback respeita o fim da faixa para retornar
+ao planner, mantendo uma única saída Icecast. `mksafe` permanece como última
+proteção, inclusive no cold boot sem nenhum áudio válido cacheado.
+
+Logs de estado: `EMERGENCY playlist updated: N tracks`, `EMERGENCY fallback ready`,
+`EMERGENCY active`, `EMERGENCY ended / planner resumed`. Os três últimos são emitidos
+por mudança de estado/disponibilidade, não por polling repetitivo.
+
+Teste integrado isolado (FFmpeg e Docker necessários; apenas tons sintéticos):
+
+```bash
+docker build -t alce-catalog-validation -f server/radio-alce/Dockerfile.catalog server/radio-alce
+ALCE_TEST_EMERGENCY=1 python3 server/radio-alce/tests/validate_runtime.py
+```
+
+Ele confirma o ciclo principal, pausa o container do planner, drena o prefetch,
+mede áudio PCM recebido do Icecast durante o fallback e verifica a recuperação.
+Exige áudio em todas as janelas de 100 ms amostradas e ausência dos erros XML/SCPLS.
+Dois ouvintes recebem o mesmo sinal. O workflow existente também executa esse teste.
+Não é uma medição da disponibilidade da EC2 nem uma garantia de todo tipo de rede.
+
+Para aplicar apenas esta correção no EC2 Instance Connect, use os comandos de
+backup/release acima, **sem editar `.env`, voz, timezone ou NTP**. Fixe o checkout
+no commit validado, copie o `.env` existente e preserve `COMPOSE_PROJECT_NAME`.
+Rode `./setup.sh --check` antes de `./setup.sh --deploy`. O rollback continua sendo
+`docker compose up -d --build --remove-orphans` no diretório de backup com o mesmo
+nome de projeto; nunca remova o volume com `down -v`.

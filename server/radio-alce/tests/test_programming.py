@@ -138,7 +138,10 @@ class EngineTests(EngineFixture):
 
 class FakeCache:
     def __init__(self, root): self.directory = Path(root) / 'cache'; self.directory.mkdir()
-    def prepare(self, value): return dict(value, path=str(self.directory / (value['id'] + '.mp3')), duration=value.get('duration', 200))
+    def prepare(self, value):
+        path = self.directory / (value['id'] + '.mp3')
+        path.write_bytes(b'prepared fixture')
+        return dict(value, path=str(path), duration=value.get('duration', 200))
     def prune(self, _): pass
 
 

@@ -5,13 +5,31 @@ log.level.set(3)
 source_password = environment.get("ICECAST_SOURCE_PASSWORD")
 planner_url = "http://catalog:8081"
 
+planner_unavailable = ref(false)
+emergency_active = ref(false)
+emergency_ready_logged = ref(false)
+
+def planner_failed() =
+  if not planner_unavailable() then
+    log("Planner unavailable; using prepared/emergency audio")
+    planner_unavailable.set(true)
+  end
+end
+
 def next_request() =
   try
-    uri = string.trim(http.get(timeout=2., "#{planner_url}/next"))
-    if uri == "" then null else request.create(uri) end
+    response = http.get(timeout=2., "#{planner_url}/next")
+    if response.status_code != 200 then
+      planner_failed()
+      null
+    else
+      planner_unavailable.set(false)
+      uri = string.trim(response)
+      if uri == "" then null else request.create(uri) end
+    end
   catch err do
     ignore(err)
-    log("Planner unavailable; using prepared/emergency audio")
+    planner_failed()
     null
   end
 end
@@ -34,13 +52,40 @@ def guard_time(track_metadata) =
 end
 program.on_track(synchronous=true, guard_time)
 # Small persistent verified MUSIC pool if planner fails. Never a second output/sequence per listener.
-emergency = playlist(id="alce_emergency", "/data/emergency.m3u", mode="normal", reload=5)
-radio = fallback(track_sensitive=true, [program, emergency])
-radio = amplify(override="liq_gain", 0.9, radio)
+emergency = playlist(id="alce_emergency", "/data/emergency.m3u",
+  mime_type="audio/x-mpegurl", mode="normal", reload=5, prefetch=2)
+
+# Provide generic metadata even on MP3s without tags; never inherit a delivery token.
+emergency = metadata.map(update=false, insert_missing=true,
+  fun (_) -> [("program_type", "MUSIC"), ("radio_token", ""), ("radio_id", "")], emergency)
+emergency = amplify(0.9, emergency)
+
+def emergency_started(_track_metadata) =
+  ignore(_track_metadata)
+  if not emergency_active() then
+    log("EMERGENCY active")
+    emergency_active.set(true)
+  end
+end
+emergency.on_track(synchronous=true, emergency_started)
+
+def program_started(_track_metadata) =
+  ignore(_track_metadata)
+  if emergency_active() then
+    log("EMERGENCY ended / planner resumed")
+    emergency_active.set(false)
+  end
+end
+program.on_track(synchronous=true, program_started)
+
+# Editorial envelopes belong ONLY to the main branch. A metadata-less fallback
+# must not inherit a finished fade or depend on estimated request duration.
+program = amplify(override="liq_gain", 0.9, program)
 # Overrides are explicit for EVERY request: MUSIC=15s, all short content=0s fade-out.
 # No crossfade, early skip, trimming or overlap; pieces retain their complete duration.
-radio = fade.out(duration=0., type="sin", radio)
-radio = fade.in(duration=0., type="sin", radio)
+program = fade.out(duration=0., type="sin", program)
+program = fade.in(duration=0., type="sin", program)
+radio = fallback(track_sensitive=true, [program, emergency])
 
 def acknowledge(track_metadata) =
   token = list.assoc(default="", "radio_token", track_metadata)
@@ -57,11 +102,15 @@ end
 radio.on_track(synchronous=false, acknowledge)
 
 def heartbeat() =
+  if emergency.is_ready() and not emergency_ready_logged() then
+    log("EMERGENCY fallback ready")
+    emergency_ready_logged.set(true)
+  end
   try
     ignore(http.get(timeout=2., "#{planner_url}/heartbeat"))
   catch err do
     ignore(err)
-    log("Planner heartbeat unavailable")
+    planner_failed()
   end
   10.
 end
