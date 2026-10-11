@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- MVP aceita streams públicos HTTP e HTTPS configurados localmente. -->
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
+    <!-- Provisional Icecast host only. Build URL validation also limits HTTP port/path. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">15.229.83.121</domain>
+    </domain-config>
 </network-security-config>

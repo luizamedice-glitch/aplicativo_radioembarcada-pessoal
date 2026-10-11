@@ -13,7 +13,12 @@ internal open class RadioSessionCallback : MediaLibrarySession.Callback {
             .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS)
             // Inclui o media notification controller: no Media3 1.6.1 seus comandos também
             // determinam as ações da sessão Android (System UI, lock screen e Bluetooth).
-            .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+            .setAvailablePlayerCommands(allowedCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS))
+            .setMediaButtonPreferences(emptyList())
+            .build()
+
+    companion object {
+        fun allowedCommands(commands: Player.Commands): Player.Commands = commands.buildUpon()
                 .removeAll(
                     Player.COMMAND_SEEK_TO_NEXT,
                     Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
@@ -29,7 +34,6 @@ internal open class RadioSessionCallback : MediaLibrarySession.Callback {
                     Player.COMMAND_SET_SHUFFLE_MODE,
                     Player.COMMAND_SET_SPEED_AND_PITCH,
                     Player.COMMAND_STOP,
-                ).build())
-            .setMediaButtonPreferences(emptyList())
-            .build()
+                ).build()
+    }
 }

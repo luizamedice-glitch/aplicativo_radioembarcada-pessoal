@@ -12,7 +12,7 @@ import java.io.IOException
 
 /** Uma falha de carregamento temporária não deve descartar o áudio já preparado. */
 @UnstableApi
-class RadioLoadErrorPolicy(private val finiteRetries: Boolean = false) : DefaultLoadErrorHandlingPolicy() {
+open class RadioLoadErrorPolicy(private val finiteRetries: Boolean = false) : DefaultLoadErrorHandlingPolicy() {
     override fun getMinimumLoadableRetryCount(dataType: Int): Int = Int.MAX_VALUE
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
         val error = loadErrorInfo.exception

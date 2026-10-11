@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 import groovy.json.JsonOutput
 
 plugins {
@@ -17,6 +18,18 @@ val jamendoClientId = providers.environmentVariable("JAMENDO_CLIENT_ID").orNull
 
 // Opt-in local preserva os arquivos no computador; o build remoto não empacota music/.
 val useLocalMusic = providers.gradleProperty("useLocalMusic").map { it.toBoolean() }.getOrElse(false)
+val playbackMode = providers.gradleProperty("playbackMode").getOrElse("STREAM")
+require(playbackMode in setOf("STREAM", "LOCAL_FALLBACK")) { "playbackMode aceita STREAM ou LOCAL_FALLBACK" }
+require(!useLocalMusic || playbackMode == "LOCAL_FALLBACK") { "Assets musicais exigem playbackMode=LOCAL_FALLBACK" }
+val radioStreamUrl = providers.gradleProperty("radioStreamUrl").orNull
+    ?: providers.environmentVariable("RADIO_STREAM_URL").orNull
+    ?: "http://15.229.83.121:8000/alce.mp3"
+val streamUri = URI(radioStreamUrl)
+require(streamUri.userInfo == null && streamUri.fragment == null && !streamUri.host.isNullOrBlank() &&
+    (streamUri.scheme == "https" || (streamUri.scheme == "http" && streamUri.host == "15.229.83.121" &&
+        streamUri.port == 8000 && streamUri.path == "/alce.mp3" && streamUri.query == null))) {
+    "Stream deve usar HTTPS ou o endpoint HTTP provisório autorizado" }
+
 val newsIntervalDebugMinutes = providers.gradleProperty("newsIntervalDebugMinutes").map { it.toLong() }.getOrElse(0)
 require(newsIntervalDebugMinutes in listOf(0L, 3L, 5L)) { "newsIntervalDebugMinutes aceita 0, 3 ou 5" }
 
@@ -27,8 +40,11 @@ android {
         applicationId = "br.com.radioembarcada"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
+        buildConfigField("String", "PLAYBACK_MODE", JsonOutput.toJson(playbackMode))
+        buildConfigField("String", "RADIO_STREAM_URL", JsonOutput.toJson(radioStreamUrl))
+        manifestPlaceholders["radioServiceClass"] = if (playbackMode == "STREAM") ".player.RadioService" else ".player.LocalFallbackRadioService"
         buildConfigField("String", "JAMENDO_CLIENT_ID", JsonOutput.toJson(jamendoClientId))
         buildConfigField("boolean", "USE_LOCAL_MUSIC", useLocalMusic.toString())
         buildConfigField("long", "NEWS_INTERVAL_DEBUG", "0L")

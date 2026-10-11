@@ -1,5 +1,6 @@
 package br.com.radioembarcada
 
+import br.com.radioembarcada.player.PlaybackMode
 import android.app.Application
 import android.net.ConnectivityManager
 import android.util.Log
@@ -20,11 +21,13 @@ import br.com.radioembarcada.storage.PlaybackHistoryRepository
 
 class RadioApplication : Application() {
     val musicProvider: MusicProvider by lazy {
+        check(PlaybackMode.active == PlaybackMode.LOCAL_FALLBACK) { "Local programming is disabled in STREAM mode" }
         if (BuildConfig.USE_LOCAL_MUSIC) LocalAssetMusicProvider(assets)
         else RemoteMusicProvider(FileMusicCatalog(filesDir.resolve("music_catalog.json")),
             connected = { getSystemService(ConnectivityManager::class.java).activeNetwork != null })
     }
     val programming by lazy {
+        check(PlaybackMode.active == PlaybackMode.LOCAL_FALLBACK) { "Local programming is disabled in STREAM mode" }
         val diagnostic: (String) -> Unit = { if (BuildConfig.DEBUG) Log.d("RadioDiagnostics", it) }
         AutomaticProgramming(musicProvider, programmingProvider = if (BuildConfig.USE_LOCAL_MUSIC) null
             else RemoteProgrammingProvider(tenants.activeTenant.clientId,
@@ -35,6 +38,7 @@ class RadioApplication : Application() {
     }
     val tenants by lazy { TenantRepository(LocalTenantStore(this)) }
     val news by lazy {
+        check(PlaybackMode.active == PlaybackMode.LOCAL_FALLBACK) { "Local news is disabled in STREAM mode" }
         val diagnostic: (String) -> Unit = { if (BuildConfig.DEBUG) Log.d("RadioDiagnostics", it) }
         NewsProgramming(RemoteNewsProvider(diagnostic = diagnostic),
             FileNewsHistory(filesDir.resolve("news_history.json")),

@@ -33,7 +33,7 @@ class RadioController(context: Context) {
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) { updateTrack(mediaMetadata) }
     }
     private val future = MediaController.Builder(context,
-        SessionToken(context, ComponentName(context, RadioService::class.java)))
+        SessionToken(context, ComponentName(context, PlaybackMode.serviceClass)))
         .setListener(object : MediaController.Listener {
             override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
                 update(extras)

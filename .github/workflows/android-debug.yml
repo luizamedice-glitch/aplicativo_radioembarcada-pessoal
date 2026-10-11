@@ -4,12 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      news_interval_debug_minutes:
-        description: 'Notícias DEBUG: 0 = 60 minutos; teste opcional 3 ou 5 minutos'
-        type: choice
-        default: '0'
-        options: ['0', '3', '5']
 
 permissions:
   contents: read
@@ -45,13 +39,11 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
           ./gradlew --version
       - name: Unit tests
-        run: ./gradlew test testDebugUnitTest --warning-mode all --max-workers=2
+        run: ./gradlew test testDebugUnitTest -PplaybackMode=STREAM --warning-mode all --max-workers=2
       - name: Android lint
-        run: ./gradlew lintDebug --warning-mode all --max-workers=2
+        run: ./gradlew lintDebug -PplaybackMode=STREAM --warning-mode all --max-workers=2
       - name: Assemble debug APK
-        env:
-          NEWS_INTERVAL_DEBUG: ${{ inputs.news_interval_debug_minutes || '0' }}
-        run: ./gradlew assembleDebug -PnewsIntervalDebugMinutes="$NEWS_INTERVAL_DEBUG" --warning-mode all --max-workers=2
+        run: ./gradlew assembleDebug -PplaybackMode=STREAM --warning-mode all --max-workers=2
       - name: Confirm debug APK
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
@@ -81,6 +73,7 @@ jobs:
           print(f'APK: {apk_path.stat().st_size} bytes ({apk_path.stat().st_size / (1024 ** 2):.1f} MiB); assets/music/: {music_count} MP3.')
           summary = (f"Testes: {totals['tests']} aprovados. Lint: {errors} erros, {warnings} avisos. "
                      f"APK verificado; MP3 incluídos: {music_count}.")
+          print("Playback mode: STREAM; one central station; no local programming")
           print(summary)
           import os
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:

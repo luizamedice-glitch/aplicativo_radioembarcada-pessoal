@@ -1,5 +1,27 @@
 # MVP — Rádio Embarcada
 
+## Arquitetura ativa — stream central autorizado
+
+O build padrão agora usa PlaybackMode.STREAM: R2 → Liquidsoap → Icecast →
+stream único → APK/ExoPlayer/MediaLibraryService. URL provisória centralizada via
+BuildConfig.RADIO_STREAM_URL; HTTP restrito ao IP autorizado, migrar para domínio HTTPS.
+RadioService não acessa providers, programação, notícias ou histórico locais.
+Play/reconexão reabre o sinal atual; Pause fecha a fonte sem recriar player/sessão.
+Sem cache de disco de stream; buffer 5–15 s, início 1,5 s, retry/backoff até 32 s.
+Controles externos somente Play/Pause, metadados fixos e layout existente preservados.
+
+A implementação anterior integral está em LocalFallbackRadioService, disponível
+somente por build LOCAL_FALLBACK explícito, sem troca automática. Manifest/Controller
+selecionam um único serviço e RadioApplication impede programação local no STREAM.
+Os tópicos históricos abaixo descrevem este fallback. O servidor não foi alterado;
+regras centrais de oito vinhetas/três jingles, ciclo institucional, notícias de 30 min,
+antirrepetição e transições serão migradas em tarefa separada. O fallback mantém
+as regras antigas, incluindo notícias de 60 min.
+
+Origin/workflows/Artifacts/push são exclusivamente do repositório pessoal
+luizamedice-glitch/aplicativo_radioembarcada-pessoal; antigo somente upstream histórico.
+
+
 ## Atualização autorizada — catálogo remoto R2
 
 A fonte ativa nesta fase é RemoteMusicProvider: catálogo público JSON versionado e faixas MP3 individuais do R2. A programação de testes é montada no app, em ciclos aleatórios completos, substituindo nesta etapa as referências históricas abaixo à programação exclusiva no servidor. Não há emissora de rádio contínua por trás.

@@ -1,6 +1,128 @@
-# Rádio Embarcada — catálogo remoto R2
+# Rádio Alce — stream central
 
-Rádio Alce reproduz faixas individuais da programação, sem emissora externa. **RemoteMusicProvider é a fonte ativa** em debug e release. O APK padrão não contém MP3 e não usa `MUSIC_ARCHIVE_URL`, credenciais R2, Jamendo ou URLs assinadas.
+Repositório ativo: **luizamedice-glitch/aplicativo_radioembarcada-pessoal**.
+`origin` deve apontar para ele. O repositório antigo é somente upstream histórico;
+commits, push em main, workflow e APKs são publicados no repositório pessoal.
+
+## Arquitetura ativa
+
+Antes, cada APK escolhia músicas e inserções a partir de music_catalog.json e
+programming.json. Agora o modo padrão é **STREAM**:
+
+```text
+Cloudflare R2 → servidor de playout → Liquidsoap → Icecast
+→ um stream MP3 → ExoPlayer → MediaLibrarySession/MediaLibraryService → UI
+```
+
+Stream provisório: **http://15.229.83.121:8000/alce.mp3**.
+Todos os celulares recebem o mesmo sinal central, com pequena diferença de buffer.
+O IP é provisório; futuramente usar domínio + HTTPS. O servidor existente em
+`server/radio-alce/` não foi alterado nesta migração.
+
+`RadioService` conecta um único MediaItem da estação. Não instancia MusicProvider,
+ProgrammingEngine, notícias, histórico musical, preload de faixas ou transições.
+Não existe fallback automático: uma falha sempre tenta novamente o mesmo stream.
+`LiveStreamPlayback` coordena intenção de Play/Pause e reconexão no mesmo ExoPlayer.
+`StationSessionPlayer` protege a identidade contra títulos/artistas ICY: **Rádio Alce**,
+**AO VIVO**, **Sua Rádio em Movimento**, com o logo local já existente.
+O layout premium, volume, cores, logo e waveform permanecem iguais.
+
+## Configuração e execução
+
+JDK **17**, SDK **35**, Build Tools **35.0.0**, Wrapper **8.11.1** e Android Studio
+Meerkat 2024.3.1 ou superior. Android mínimo API 26; reprodução STREAM exige internet.
+
+```sh
+./gradlew test testDebugUnitTest lintDebug assembleDebug -PplaybackMode=STREAM --max-workers=2
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+`app/build.gradle.kts` centraliza a URL padrão e gera `BuildConfig.RADIO_STREAM_URL`.
+Para um endpoint futuro HTTPS, use `-PradioStreamUrl=https://radio.exemplo/alce.mp3`
+ou a variável `RADIO_STREAM_URL`. URLs com credenciais/fragmentos são rejeitadas.
+O único endpoint HTTP permitido na configuração é o provisório; a configuração
+Android bloqueia cleartext global e libera somente o IP explicitamente, sem subdomínios.
+Network Security Config restringe o host; a validação da URL também limita porta e caminho.
+Uma futura configuração por tenant pode alimentar esta mesma composição, sem espalhar URLs.
+
+`PlaybackMode.STREAM` é padrão. Para usar conscientemente a implementação anterior:
+
+```sh
+./gradlew assembleDebug -PplaybackMode=LOCAL_FALLBACK
+# Biblioteca de assets opcional, só no fallback:
+./gradlew assembleDebug -PplaybackMode=LOCAL_FALLBACK -PuseLocalMusic=true
+```
+
+O Manifest usa um placeholder e declara **um único serviço**: RadioService no STREAM
+ou LocalFallbackRadioService no fallback. O MediaController conecta ao mesmo modo;
+RadioApplication bloqueia inicialização dos providers locais no STREAM. Assets
+music/** permanecem excluídos do APK padrão e não são apagados do workspace.
+
+## Rádio ao vivo, buffer e recuperação
+
+Play abre uma conexão nova no sinal atual; Pause pausa e encerra o carregamento,
+descartando o buffer antigo. Retomar ou reabrir nunca restaura posição de podcast.
+Player e sessão não são recriados a cada comando. Não existe cache de disco do
+stream: reutilizar bytes de uma sessão anterior atrasaria a transmissão.
+
+`LiveStreamConfiguration` centraliza buffer mínimo **5 s**, máximo **15 s**, início
+**1,5 s** e rebuffer **3 s**; não usa o buffer de 90 s do fallback musical. A fonte
+progressiva é ao vivo, sem duração falsa, seek ou navegação. O carregador faz até
+três tentativas por falha; erros terminais/fim do sinal abrem uma nova conexão com
+backoff **1, 2, 4, 8, 16, 32 s**, limitado a 32 s. O contador só reinicia após reprodução
+real. Sem rede, não há loops de requests; buffer audível continua até acabar. A volta
+da rede recupera o sinal parado sem recriar o player; troca saudável não o reinicia.
+Pause e perda de foco cancelam retries. Não há healthcheck/polling extra.
+
+MediaSession e o callback compartilhado mantêm somente Play/Pause e consultas,
+sem Next/Previous/Seek/shuffle. Android Auto navega por uma única estação; Bluetooth,
+headset, notificação e lock screen usam a mesma restrição. Audio Focus, noisy,
+wake lock de rede e foreground de MediaLibraryService permanecem. Logs técnicos
+somente DEBUG; a UI mostra apenas a identidade e animação conforme o estado.
+
+## Validação e APK
+
+O workflow existente **Android debug** usa Ubuntu/JDK 17/SDK 35, testa, executa lint,
+assembleDebug e valida a assinatura e ausência de MP3. Gera somente STREAM.
+No repositório pessoal: **Actions → Android debug → Run workflow → main**;
+abra a execução e baixe **Artifacts → radio-embarcada-debug-apk**, que contém
+**app-debug.apk**, retido por sete dias. APK: `app/build/outputs/apk/debug/app-debug.apk`.
+MP3, RAR, APK e credenciais locais não são versionados.
+
+Teste manual com **dois dispositivos**:
+
+1. Instale o mesmo APK em A e B, abra Rádio Alce e pressione Play em ambos.
+2. Compare áudio, música atual, passagem à próxima e blocos: devem vir do mesmo
+   sinal. Alguns segundos de diferença de buffer são aceitáveis.
+3. Pause A por alguns minutos enquanto B toca; retome A. A deve voltar ao sinal
+   atual de B, não à posição em que pausou. Force Stop e reabertura têm o mesmo resultado.
+4. Teste Wi-Fi → 4G/5G → Wi-Fi, perda de internet e retorno, servidor indisponível,
+   segundo plano, tela apagada, chamadas, Bluetooth e Android Auto. Nenhuma falha
+   pode iniciar a programação independente do fallback.
+5. Confira somente Play/Pause e identidade fixa nos controles nativos, sem faixa/ICY.
+
+Testes usam fontes/players simulados e Robolectric, sem depender do stream real.
+A validação automática não substitui ouvir dois aparelhos ou testar o veículo.
+
+## Regras a migrar para o servidor
+
+O radio.liq versionado atualmente transmite o catálogo aleatório; a implementação
+completa de vinhetas, jingles, notícias e antirrepetição **não é realizada nesta tarefa**.
+Próxima etapa central: pools remotos (hoje oito vinhetas/três jingles), uma inserção
+por troca no padrão STATION_ID/STATION_ID/JINGLE, notícias a cada **30 minutos** com
+intro, seis horas musicais/least-recently-played, preload e transições com peças
+integrais. Os componentes/testes antigos abaixo permanecem como referência/fallback.
+O fallback preserva seu intervalo anterior de notícias de 60 minutos; não executa
+nenhuma dessas decisões no modo STREAM. Não há garantia de regras ausentes no servidor.
+
+---
+
+As seções seguintes descrevem **exclusivamente a arquitetura anterior preservada**;
+não devem ser interpretadas como comportamento do build STREAM.
+
+# Implementação anterior preservada — somente LOCAL_FALLBACK
+
+Rádio Alce reproduz faixas individuais da programação, sem emissora externa. **RemoteMusicProvider é a fonte do fallback explícito**, não do build padrão STREAM. O APK padrão não contém MP3 e não usa `MUSIC_ARCHIVE_URL`, credenciais R2, Jamendo ou URLs assinadas.
 
 Catálogo público do MVP: [music_catalog.json](https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/music_catalog.json). O catálogo atual possui versão 1 e 77 itens MUSIC; esses números não são fixados no código. A configuração fica em `network/catalog/RemoteCatalogConfiguration.kt`.
 
@@ -142,7 +264,7 @@ Estados distinguem **Carregando programação**, **Conectando**, **Ao vivo**, **
 LocalAssetMusicProvider permanece como fallback **opt-in de desenvolvimento**:
 
 ```sh
-./gradlew assembleDebug -PuseLocalMusic=true
+./gradlew assembleDebug -PplaybackMode=LOCAL_FALLBACK -PuseLocalMusic=true
 ```
 
 Coloque MP3 em `app/src/main/assets/music/` ou qualquer subpasta, como MPB/rock80/pop. O catálogo local lê título/artista/duração/capa embutida segura, usa nomes como fallback, pula áudio defeituoso e funciona sem rede. Buffer local: mínimo 1 s, máximo 5 s, início 250 ms, rebuffer 500 ms; preload de 3 s / 1 s. UI não acessa arquivos.
@@ -167,7 +289,7 @@ MUSIC mantém saída de 15 s; intro/notícia tocam integralmente, sem crossfade 
 
 `filesDir/news_history.json` guarda atomicamente `lastNewsPlayedAt`, os últimos **100 IDs** e tempo ativo acumulado. A notícia é registrada ao começar efetivamente a tocar; reservar/preparar não consome o histórico. Reinício não dispara repetição imediata. O catálogo de notícias é consultado antes do vencimento do relógio; todos os candidatos são ordenados por publicação e filtrados pelo histórico/idade/duração. Falhas mantêm a rádio musical e tentam novamente sem polling agressivo.
 
-**Teste acelerado somente DEBUG:** `./gradlew assembleDebug -PnewsIntervalDebugMinutes=3` (também aceita `5`; `0` usa 60 minutos). No workflow existente, **Run workflow → news_interval_debug_minutes → 3 ou 5**. `BuildConfig.NEWS_INTERVAL_DEBUG` é zero em release; o intervalo de produção nunca muda. O bloco aguarda a faixa terminar, portanto o teste pode ultrapassar esses minutos. Não há botão de pular. Pause durante a intro e o drop, retome, confira crédito/metadados, fim integral e próxima música; depois confirme que a inserção normal adiada ainda é a próxima. Teste feed/áudio indisponível e confira continuidade musical. Logs DEBUG mostram refresh, elegibilidade, seleção, relógio e readiness real. O gap registrado é estimativa do scheduler, não medição acústica de zero samples; continuidade audível, Android Auto e Bluetooth precisam de validação em aparelho.
+**Teste acelerado somente DEBUG:** `./gradlew assembleDebug -PplaybackMode=LOCAL_FALLBACK -PnewsIntervalDebugMinutes=3` (também aceita `5`; `0` usa 60 minutos). O workflow padrão gera somente STREAM e não executa notícias locais. `BuildConfig.NEWS_INTERVAL_DEBUG` é zero em release; o intervalo de produção nunca muda. O bloco aguarda a faixa terminar, portanto o teste pode ultrapassar esses minutos. Não há botão de pular. Pause durante a intro e o drop, retome, confira crédito/metadados, fim integral e próxima música; depois confirme que a inserção normal adiada ainda é a próxima. Teste feed/áudio indisponível e confira continuidade musical. Logs DEBUG mostram refresh, elegibilidade, seleção, relógio e readiness real. O gap registrado é estimativa do scheduler, não medição acústica de zero samples; continuidade audível, Android Auto e Bluetooth precisam de validação em aparelho.
 
 ## GitHub Actions e APK
 
