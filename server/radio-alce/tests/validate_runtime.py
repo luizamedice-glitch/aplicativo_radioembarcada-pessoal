@@ -19,6 +19,7 @@ import uuid
 import threading
 import array
 import math
+from audio_amplitude import volume_detect, require_audible
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = 'savonet/liquidsoap:v2.4.x-latest@sha256:f19e1ca92320459d5fad5265e0844cc7ae92501d686f788e43ca8a9d6bec44cc'
@@ -92,7 +93,7 @@ def main():
         cache = data / 'cache'; cache.mkdir(mode=0o755); cache.chmod(0o755)
         for name, length, frequency in [('music',4,440),('station',1.1,880),('jingle',1.3,1320),('news',30,1100)]:
             subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'sine=frequency={frequency}:duration={length}',
-                            '-c:a','libmp3lame','-b:a','128k',str(cache / (name+'.mp3'))], check=True)
+                            '-af','volume=2','-c:a','libmp3lame','-b:a','128k',str(cache / (name+'.mp3'))], check=True)
             (cache / (name+'.mp3')).chmod(0o644)
         def item(name, kind, number):
             return {'id':f'{name}-{number}', 'type':kind, 'title':name,
@@ -106,6 +107,21 @@ def main():
         shutil.copy(ROOT / 'icecast/Dockerfile', icecast / 'Dockerfile')
         xml = (ROOT / 'icecast/icecast.xml.template').read_text().replace('SOURCE_PASS_PLACEHOLDER','fixture-source').replace('ADMIN_PASS_PLACEHOLDER','fixture-admin')
         (icecast / 'icecast.xml').write_text(xml)
+        # Diagnostic stages use the SAME production source/callback/output chain.
+        stage=os.getenv('ALCE_AUDIO_STAGE','production')
+        processing={
+            'production':'',
+            'amplify':'program = amplify(override="liq_gain", 0.9, program)\n',
+            'fade_out':'program = amplify(override="liq_gain", 0.9, program)\nprogram = fade.out(duration=0., type="sin", program)\n',
+            'fade_in':'program = amplify(override="liq_gain", 0.9, program)\nprogram = fade.in(duration=0., type="sin", program)\n',
+            'legacy_fades':'program = amplify(override="liq_gain", 0.9, program)\nprogram = fade.out(duration=0., type="sin", program)\nprogram = fade.in(duration=0., type="sin", program)\n',
+            'explicit_fades':'program = amplify(override="liq_gain", 0.9, program)\nprogram = fade.out(duration=0., override_duration="liq_fade_out", track_sensitive=true, type="sin", program)\nprogram = fade.in(duration=0., override_duration="liq_fade_in", track_sensitive=true, type="sin", program)\n',
+        }
+        script=root/'radio.liq'
+        original=(ROOT/'liquidsoap/radio.liq').read_text()
+        script.write_text(original.replace('radio = fallback(track_sensitive=true, [program, emergency])',
+                                          processing[stage]+'radio = fallback(track_sensitive=true, [program, emergency])'))
+        script.chmod(0o644)
         docker('build','-t',tag+'-icecast',str(icecast))
         docker('network','create',tag)
         try:
@@ -114,7 +130,7 @@ def main():
                 ('catalog',['--network-alias','catalog','-p','127.0.0.1::8081','-v',f'{data}:/data','-v',f'{root}/runtime.py:/runtime.py:ro',
                             '-e','NO_PROXY=catalog,icecast,localhost,127.0.0.1','-e','ALCE_TEST_NEWS='+os.getenv('ALCE_TEST_NEWS','0'),'alce-catalog-validation','python','/runtime.py']),
                 ('liquidsoap',['-e','ICECAST_SOURCE_PASSWORD=fixture-source','-e','NO_PROXY=catalog,icecast,localhost,127.0.0.1',
-                               '-v',f'{data}:/data','-v',f'{ROOT}/liquidsoap/radio.liq:/radio.liq:ro',IMAGE,'liquidsoap','/radio.liq'])]:
+                               '-v',f'{data}:/data','-v',f'{script}:/radio.liq:ro',IMAGE,'liquidsoap','/radio.liq'])]:
                 container = tag+'-'+name
                 docker('run','-d','--name',container,'--network',tag,
                        '-e','HTTP_PROXY=','-e','HTTPS_PROXY=','-e','ALL_PROXY=',
@@ -207,7 +223,12 @@ def main():
                     assert delta>=current['duration']-.1, 'Short content truncated'
                 gaps.append(abs(delta-current['duration']))
             (root/'capture.mp3').write_bytes(captures[0])
-            subprocess.run(['ffmpeg','-v','error','-xerror','-i',str(root/'capture.mp3'),'-f','null','-'],check=True)
+            levels=volume_detect(root/'capture.mp3', start_seconds=10)
+            whole=volume_detect(root/'capture.mp3')
+            direct=volume_detect(cache/'music.mp3')
+            print(json.dumps({'audio_stage':stage,'input_volume':direct,'icecast_volume':levels,'whole_capture_volume':whole}))
+            if stage=='production': require_audible(levels)
+            subprocess.run(['ffmpeg','-v','error','-xerror' ,'-i',str(root/'capture.mp3'),'-f','null','-'],check=True)
             print(json.dumps({'single_source':True,'listeners':2,'same_encoded_signal':True,
                               'events':len(events),'first_types':types[:len(expected)],
                               'max_boundary_timing_error_ms':round(max(gaps)*1000) if gaps else None,

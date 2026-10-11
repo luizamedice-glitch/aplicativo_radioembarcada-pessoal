@@ -16,7 +16,11 @@ O planner prepara a próxima música antes de publicar uma inserção. URLs são
 
 Cache operacional LRU inicial **512 MiB**, limite por arquivo 150 MiB. Arquivos em reprodução, reservados e pequeno pool de emergência não são removidos; institucionais do catálogo atual/intro de notícias são protegidos. Portanto o limite pode ser temporariamente excedido por itens protegidos. Os 48 anúncios ficam separadamente em `/data/time/`. Não baixa a biblioteca inteira nem oferece download ao usuário.
 
-Fade de saída **15 s somente para MUSIC**, seno contínuo até o fim real, sem overlap/crossfade/seek/clipping. Entrada de peça curta 150 ms; de música 100 ms. `STATION_ID`, `JINGLE`, intro, hora e notícia têm fade-out zero e tocam integralmente. Ganhos: música/notícia 0,9; demais peças 0,8. Não há normalização agressiva nem soma de dois áudios. Silêncio já gravado nos arquivos não é removido; audibilidade final deve ser validada na EC2 com as peças reais.
+**Modo temporário de recuperação de áudio:** o ramo principal não aplica `amplify`,
+`fade.in`, `fade.out`, crossfade ou normalização. Requests/metadados e decisões do
+planner são preservados, mas os envelopes não são executados. Transições são
+cortes limpos entre peças completas. O emergency existente permanece inalterado.
+A prioridade é PCM audível no Icecast; não reintroduzir fades sem teste de amplitude.
 
 Falha de música: cooldown 10 min e outra seleção; peça institucional: tenta alternativas do mesmo tipo, depois segue música. Falha editorial: cancela o bloco inteiro, sem intro isolada. Um pool persistente de três músicas verificadas sustenta o sinal caso o planner falhe. Esse modo de emergência pode relaxar a antirrepetição. Se nunca houve áudio válido no primeiro boot e todas as fontes estão indisponíveis, `mksafe` mantém a conexão Icecast com silêncio; isso é degradado, não uma programação saudável. Não é possível garantir áudio sem uma fonte válida.
 
@@ -109,7 +113,7 @@ ALCE_TEST_NEWS=1 python3 server/radio-alce/tests/validate_runtime.py
 
 O workflow **existente** `Android debug` executa testes Python e valida sintaxe Liquidsoap, além de testes Android/lint/build. Artifact APK continua `radio-embarcada-debug-apk`; não contém música, chave TTS ou alteração de player nesta tarefa.
 
-Após deploy, ouvir `http://15.229.83.121:8000/alce.mp3` em dois aparelhos simultaneamente: música/vinheta/música/vinheta/música/jingle/música, peças completas, fades suaves, mesma sequência e diferença pequena de buffer. Ouvir também um bloco de 30 min; se terminou fora da tolerância, **não haverá hora**. Testar restart completo com `docker compose restart` e conferir histórico/ciclo persistentes. Para substituir apenas o serviço catalog em manutenção, reiniciar também liquidsoap para descartar reservas de decoder da sessão anterior.
+Após deploy, ouvir `http://15.229.83.121:8000/alce.mp3` em dois aparelhos simultaneamente: música/vinheta/música/vinheta/música/jingle/música, peças completas, cortes limpos, mesma sequência e diferença pequena de buffer. Ouvir também um bloco de 30 min; se terminou fora da tolerância, **não haverá hora**. Testar restart completo com `docker compose restart` e conferir histórico/ciclo persistentes. Para substituir apenas o serviço catalog em manutenção, reiniciar também liquidsoap para descartar reservas de decoder da sessão anterior.
 
 O Codex não possui SSH/SSM da EC2; validações isoladas não comprovam que a nova versão já foi aplicada na produção. Não foi feito cutover remoto.
 
@@ -121,7 +125,7 @@ validados, e um snapshot antigo é migrado ao iniciar mesmo sem acesso ao R2.
 Não há `annotate:`, URLs ou tokens nesse arquivo. O Liquidsoap usa explicitamente
 o parser M3U (`audio/x-mpegurl`) e antecipa dois arquivos do fallback.
 
-O ganho/fade editorial é aplicado somente ao ramo principal, antes do `fallback`.
+O ganho/fade editorial do ramo principal está temporariamente desativado.
 O emergency usa ganho fixo moderado (0,9), sem envoltória editorial nem dependência
 de metadados/duração. `metadata.map` fornece metadados genéricos até quando o MP3
 não possui tags e limpa explicitamente tokens/ids. Assim, o fallback não herda
@@ -158,3 +162,59 @@ no commit validado, copie o `.env` existente e preserve `COMPOSE_PROJECT_NAME`.
 Rode `./setup.sh --check` antes de `./setup.sh --deploy`. O rollback continua sendo
 `docker compose up -d --build --remove-orphans` no diretório de backup com o mesmo
 nome de projeto; nunca remova o volume com `down -v`.
+
+## Isolamento de amplitude — Liquidsoap 2.4.6
+
+Pipeline principal atual: `request.dynamic → fallback → mksafe → output.icecast`
+(MP3 128 kbps, mesmo `/alce.mp3`). Callbacks, planner, emergency, histórico e
+programação continuam intactos. Os campos `liq_gain`/`liq_fade_out`/`liq_fade_in`
+continuam chegando, mas o principal não os aplica nesta recuperação.
+
+```bash
+docker build -t alce-catalog-validation -f server/radio-alce/Dockerfile.catalog server/radio-alce
+python3 server/radio-alce/tests/validate_audio_pipeline.py
+```
+
+A/B usa a mesma configuração de produção e apenas insere operadores no ramo
+principal de containers isolados. Mede o MP3 de entrada e o áudio recebido de
+`/alce.mp3` usando **FFmpeg volumedetect**, incluindo a captura após os primeiros
+10 segundos. Casos: sem processamento, amplify, fade-out isolado, fade-in isolado,
+combinação antiga e overrides explícitos com `track_sensitive=true`.
+`override_duration` padrão já é `liq_fade_out`/`liq_fade_in`: valores numéricos válidos
+substituem `duration=0.`. Entretanto `track_sensitive` padrão é **false**, portanto
+a envoltória não é reiniciada a cada faixa. O teste identifica se o sinal permanece
+zerado após o primeiro fade-out. O caso explícito é apenas diagnóstico; não está
+habilitado no stream de produção.
+
+O teste de recuperação exige média > −40 dB e pico > −20 dB, bem acima de −80/−91 dB.
+Tons sintéticos pequenos são gerados temporariamente; nenhuma música/licença ou
+internet é necessária. Metadata, decoder válido e HTTP 200 sozinhos não aprovam o
+teste. O workflow existente executa essa regressão antes do build Android.
+
+Resultado de isolamento no Liquidsoap fixado (volume do Icecast após 10 s):
+
+| Ramo principal | Média | Pico |
+|---|---:|---:|
+| Sem processamento — produção atual | −19,0 dB | −15,8 dB |
+| Apenas amplify | −20,1 dB | −16,8 dB |
+| Amplify + fade.out padrão | −91,0 dB | −91,0 dB |
+| Amplify + fade.in padrão | −20,1 dB | −16,8 dB |
+| Cadeia antiga de fades | −91,0 dB | −91,0 dB |
+| Fades com overrides explícitos e track_sensitive=true | −23,0 dB | −16,9 dB |
+
+Entrada sintética: média −15,5 dB, pico −12,5 dB. A conversão mono/estéreo e
+re-encoding afetam os níveis absolutos, mas todas as comparações usam o mesmo MP3.
+A média da captura inteira podia esconder o problema, pois inclui áudio inicial:
+por isso a regressão também mede o período após a primeira faixa terminar.
+O responsável isolado foi `fade.out` sem reinicialização por faixa. `duration=0.`
+não neutraliza o operador quando o request possui `liq_fade_out=15.0`.
+
+Para este hotfix, não é necessário reiniciar catalog ou Icecast. Faça backup do
+`liquidsoap/radio.liq` da instalação ativa, clone o repositório pessoal em um
+novo diretório e fixe o commit validado. No diretório Compose ativo, valide a
+candidata com `docker compose run --rm --no-deps -v /caminho/candidata.liq:/candidate.liq:ro liquidsoap liquidsoap --check /candidate.liq`.
+Somente após aprovação copie a candidata sobre `liquidsoap/radio.liq` e execute
+`docker compose up -d --no-deps --force-recreate liquidsoap`. Para rollback,
+restaure esse único arquivo do backup e repita o último comando. Credenciais,
+volumes, imagem fixada, planner e emergency não são alterados. O encoder será
+reconectado uma vez; valide a amplitude do stream após a troca.

@@ -78,13 +78,8 @@ def program_started(_track_metadata) =
 end
 program.on_track(synchronous=true, program_started)
 
-# Editorial envelopes belong ONLY to the main branch. A metadata-less fallback
-# must not inherit a finished fade or depend on estimated request duration.
-program = amplify(override="liq_gain", 0.9, program)
-# Overrides are explicit for EVERY request: MUSIC=15s, all short content=0s fade-out.
-# No crossfade, early skip, trimming or overlap; pieces retain their complete duration.
-program = fade.out(duration=0., type="sin", program)
-program = fade.in(duration=0., type="sin", program)
+# Restore the primary PCM path without metadata-dependent gain/fade processing.
+# Fades must pass real output-amplitude regression tests before being re-enabled.
 radio = fallback(track_sensitive=true, [program, emergency])
 
 def acknowledge(track_metadata) =

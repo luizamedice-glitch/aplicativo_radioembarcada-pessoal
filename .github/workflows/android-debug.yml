@@ -55,9 +55,10 @@ jobs:
             --entrypoint liquidsoap \
             savonet/liquidsoap:v2.4.x-latest@sha256:f19e1ca92320459d5fad5265e0844cc7ae92501d686f788e43ca8a9d6bec44cc \
             --check /scripts/radio.liq
-      - name: Emergency fallback audio integration
+      - name: Audio amplitude and emergency integration
         run: |
           docker build -t alce-catalog-validation -f server/radio-alce/Dockerfile.catalog server/radio-alce
+          python3 server/radio-alce/tests/validate_audio_pipeline.py
           ALCE_TEST_EMERGENCY=1 python3 server/radio-alce/tests/validate_runtime.py
       - name: Unit tests
         run: ./gradlew test testDebugUnitTest -PplaybackMode=STREAM --warning-mode all --max-workers=2
