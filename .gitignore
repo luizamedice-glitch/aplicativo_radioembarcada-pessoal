@@ -20,3 +20,10 @@ MPB.rar
 .env
 .env.*
 __pycache__/
+
+!server/radio-alce/.env.example
+server/radio-alce/backups/
+server/radio-alce/data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

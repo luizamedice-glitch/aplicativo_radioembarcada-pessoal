@@ -1,0 +1,149 @@
+"""One global sequencer. Reservations are not executions; news does not consume the cycle."""
+import copy
+import logging
+import random
+import time
+from collections import deque
+import config
+
+log = logging.getLogger('radio')
+
+
+class ShuffleBag:
+    def __init__(self, state=None, rng=None):
+        state = state or {}
+        self.remaining = deque(state.get('remaining', []))
+        self.keys = set(state.get('keys', []))
+        self.last = state.get('last')
+        self.rng = rng or random.SystemRandom()
+
+    def invalidate(self):
+        self.keys.clear()
+        self.remaining.clear()
+
+    def next(self, pool):
+        entries = {item['id']: item for item in pool}
+        if not entries:
+            return None
+        if self.keys != entries.keys():
+            self.remaining.clear()
+            self.keys = set(entries)
+        if not self.remaining:
+            ids = list(entries)
+            self.rng.shuffle(ids)
+            if len(ids) > 1 and ids[0] == self.last:
+                index = self.rng.randrange(1, len(ids))
+                ids[0], ids[index] = ids[index], ids[0]
+            self.remaining.extend(ids)
+        id = self.remaining.popleft()
+        self.last = id
+        return entries[id]
+
+    def snapshot(self):
+        return {'remaining': list(self.remaining), 'keys': sorted(self.keys), 'last': self.last}
+
+
+class ProgrammingEngine:
+    def __init__(self, storage, clock=time.time, rng=None):
+        self.storage, self.clock = storage, clock
+        self.rng = rng or random.SystemRandom()
+        self.state = storage.get('programming', {})
+        self.state.setdefault('last_news_slot', int(self.clock() // config.NEWS_INTERVAL))
+        self.position = self.state.get('position', 0) % len(config.INSERTION_PATTERN)
+        self.stations = ShuffleBag(self.state.get('stations'), self.rng)
+        self.jingles = ShuffleBag(self.state.get('jingles'), self.rng)
+        self.version = self.state.get('version')
+        self.last_music = storage.get('last_music')
+        self.failed_until = {}
+
+    def snapshot(self):
+        return {'position': self.position, 'stations': self.stations.snapshot(),
+                'jingles': self.jingles.snapshot(), 'version': self.version,
+                'last_news_slot': self.state.get('last_news_slot', 0)}
+
+    def update(self, programming):
+        if self.version != programming['version']:
+            self.stations.invalidate()
+            self.jingles.invalidate()
+            self.version = programming['version']
+
+    def failed(self, item):
+        self.failed_until[item['id']] = self.clock() + config.FAILURE_COOLDOWN
+        log.warning('AUDIO ignored id=%s type=%s; cooldown=%ss', item['id'], item['type'], config.FAILURE_COOLDOWN)
+
+    def available(self, pool):
+        return [item for item in pool if self.failed_until.get(item['id'], 0) <= self.clock()]
+
+    def music(self, catalog, reserved=()):
+        self.storage.reconcile({item['id'] for item in catalog})
+        last = reserved[-1] if reserved else self.last_music
+        candidates = [item for item in self.available(catalog)
+                      if (item['id'] not in reserved or len(catalog) == 1) and (item['id'] != last or len(catalog) == 1)]
+        history = self.storage.history()
+        for window in config.REPEAT_WINDOWS:
+            eligible = [item for item in candidates if window == 0 or
+                        self.clock() - history.get(item['id'], {}).get('played_at', float('-inf')) >= window]
+            if window == config.REPEAT_WINDOWS[0]:
+                log.info('HISTORY blocked tracks=%s eligible tracks=%s', len(candidates) - len(eligible), len(eligible))
+            if not eligible:
+                continue
+            if window != config.REPEAT_WINDOWS[0]:
+                log.info('HISTORY relaxed window=%ss; catalog exhausted', window)
+            artist_times = {}
+            for entry in history.values():
+                if entry['artist']:
+                    artist_times[entry['artist']] = max(artist_times.get(entry['artist'], 0), entry['played_at'])
+            artists = [item for item in eligible if self.clock() - artist_times.get(
+                item.get('artist', '').strip().casefold(), float('-inf')) >= config.ARTIST_WINDOW]
+            eligible = artists or eligible
+            never = [item for item in eligible if item['id'] not in history]
+            if never:
+                return self.rng.choice(never)
+            oldest = sorted(eligible, key=lambda item: history[item['id']]['played_at'])
+            # Shuffle within a least-recently-played group, rather than deterministic full cycles.
+            return self.rng.choice(oldest[:max(1, min(5, (len(oldest) + 3) // 4))])
+        return None
+
+    def insertion(self, programming, prepare):
+        self.update(programming)
+        kind = config.INSERTION_PATTERN[self.position]
+        pool = self.available(programming['stationIds' if kind == 'STATION_ID' else 'jingles'])
+        bag = self.stations if kind == 'STATION_ID' else self.jingles
+        for _ in range(len(pool)):
+            item = bag.next(pool)
+            try:
+                prepared = prepare(item)
+                self.position = (self.position + 1) % len(config.INSERTION_PATTERN)
+                log.info('INTERSTITIAL %s: %s; bag remaining=%s', kind, item['title'], len(bag.remaining))
+                return prepared
+            except Exception:
+                self.failed(item)
+                pool = self.available(pool)
+                if not pool:
+                    break
+        # One slot only; never substitute a jingle+station ID combination.
+        self.position = (self.position + 1) % len(config.INSERTION_PATTERN)
+        log.warning('INTERSTITIAL %s unavailable; following MUSIC directly', kind)
+        return None
+
+    def news_due(self, boundary):
+        slot = int(boundary // config.NEWS_INTERVAL)
+        # No immediate news on first boot; restore the previous successful boundary after reboot.
+        last = self.state.get('last_news_slot')
+        if last is None:
+            self.state['last_news_slot'] = int(self.clock() // config.NEWS_INTERVAL)
+            last = self.state['last_news_slot']
+        return slot > last
+
+    def reserve_news(self, boundary):
+        self.state['last_news_slot'] = int(boundary // config.NEWS_INTERVAL)
+
+    def started(self, item, checkpoint):
+        self.storage.started(item, checkpoint, self.clock(), config.HISTORY_RETENTION,
+                             config.HISTORY_LIMIT, config.NEWS_HISTORY_LIMIT)
+        if item['type'] == 'MUSIC':
+            self.last_music = item['id']
+        log.info('NOW PLAYING %s: %s / %s', item['type'], item['id'], item['title'])
+
+    def checkpoint(self):
+        return copy.deepcopy(self.snapshot())

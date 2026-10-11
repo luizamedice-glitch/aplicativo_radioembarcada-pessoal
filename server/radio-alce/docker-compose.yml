@@ -6,6 +6,11 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8000/status-json.xsl > /dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   catalog:
     build:
@@ -13,22 +18,42 @@ services:
       dockerfile: Dockerfile.catalog
     container_name: radio-alce-catalog
     restart: unless-stopped
+    environment:
+      FREETTS_API_KEY: ${FREETTS_API_KEY:-}
+      FREETTS_VOICE: ${FREETTS_VOICE:-pt-BR-AntonioNeural}
+      TZ: America/Sao_Paulo
     volumes:
       - radio-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health',timeout=3)"]
+      start_period: 300s
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   liquidsoap:
-    image: savonet/liquidsoap:v2.4.x-latest
+    # Pin the syntax/runtime actually validated (2.4.6), rather than a moving latest tag.
+    image: savonet/liquidsoap:v2.4.x-latest@sha256:f19e1ca92320459d5fad5265e0844cc7ae92501d686f788e43ca8a9d6bec44cc
     container_name: radio-alce-liquidsoap
     restart: unless-stopped
     depends_on:
-      - icecast
-      - catalog
-    env_file:
-      - .env
+      icecast:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?Run setup.sh first}
+      TZ: America/Sao_Paulo
     volumes:
-      - ./liquidsoap/radio.liq:/radio.liq:ro
+      - ${LIQUIDSOAP_CONFIG:-./liquidsoap/radio.liq}:/radio.liq:ro
       - radio-data:/data
     command: ["liquidsoap", "/radio.liq"]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/liquidsoap.heartbeat && [ $$(( $$(date +%s) - $$(stat -c %Y /data/liquidsoap.heartbeat) )) -lt 60 ]"]
+      start_period: 30s
+      interval: 15s
+      timeout: 5s
+      retries: 4
 
 volumes:
   radio-data:

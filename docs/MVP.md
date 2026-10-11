@@ -19,9 +19,11 @@ e o foreground sincronizados. Delegação Kotlin de métodos padrão Java é evi
 A implementação anterior integral está em LocalFallbackRadioService, disponível
 somente por build LOCAL_FALLBACK explícito, sem troca automática. Manifest/Controller
 selecionam um único serviço e RadioApplication impede programação local no STREAM.
-Os tópicos históricos abaixo descrevem este fallback. O servidor não foi alterado;
-regras centrais de oito vinhetas/três jingles, ciclo institucional, notícias de 30 min,
-antirrepetição e transições serão migradas em tarefa separada. O fallback mantém
+Os tópicos históricos abaixo descrevem este fallback. O servidor agora implementa
+pools dinâmicos (oito vinhetas/três jingles atuais), ciclo institucional, notícias de
+30 min, histórico SQLite de 6 h, cache/preload local e fade exclusivo de MUSIC.
+Hora FreeTTS opcional usa São Paulo e é omitida se o boundary atrasar mais de 60 s.
+Deploy/rollback pela EC2 Instance Connect: server/radio-alce/README.md. O fallback mantém
 as regras antigas, incluindo notícias de 60 min.
 
 Origin/workflows/Artifacts/push são exclusivamente do repositório pessoal

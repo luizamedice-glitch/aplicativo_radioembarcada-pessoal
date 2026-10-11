@@ -1,0 +1,9 @@
+.env
+.env.*
+data/
+backups/
+__pycache__/
+tests/
+*.sqlite3*
+*.mp3
+*.rar

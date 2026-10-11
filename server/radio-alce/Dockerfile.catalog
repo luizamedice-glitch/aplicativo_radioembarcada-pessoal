@@ -1,3 +1,11 @@
-FROM python:3.13-alpine
-COPY sync_catalog.py /app/sync_catalog.py
-CMD ["python","/app/sync_catalog.py"]
+# syntax=docker/dockerfile:1
+FROM python:3.13-slim-bookworm
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then \
+      apt-get -o Acquire::https::CaInfo=/run/secrets/proxy_ca update && \
+      apt-get -o Acquire::https::CaInfo=/run/secrets/proxy_ca install -y --no-install-recommends ffmpeg ca-certificates tzdata; \
+    else apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata; fi && \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY *.py /app/
+CMD ["python", "-u", "/app/sync_catalog.py"]

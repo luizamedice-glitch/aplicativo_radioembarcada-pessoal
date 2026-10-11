@@ -16,8 +16,11 @@ Cloudflare R2 → servidor de playout → Liquidsoap → Icecast
 
 Stream provisório: **http://15.229.83.121:8000/alce.mp3**.
 Todos os celulares recebem o mesmo sinal central, com pequena diferença de buffer.
-O IP é provisório; futuramente usar domínio + HTTPS. O servidor existente em
-`server/radio-alce/` não foi alterado nesta migração.
+O IP é provisório; futuramente usar domínio + HTTPS. O servidor em
+`server/radio-alce/` agora inclui programação global, histórico persistente,
+vinhetas/jingles, notícias de 30 min e hora opcional FreeTTS. Consulte
+[deploy e rollback](server/radio-alce/README.md). Sua aplicação na EC2 é manual
+via Instance Connect; o Android permanece inalterado.
 
 `RadioService` conecta um único MediaItem da estação. Não instancia MusicProvider,
 ProgrammingEngine, notícias, histórico musical, preload de faixas ou transições.
