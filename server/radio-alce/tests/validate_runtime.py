@@ -154,9 +154,11 @@ def main():
                         event_path=data/'events.jsonl'
                         wait_for(lambda: event_path.exists() and len(event_path.read_text().splitlines())>=7,
                                  'Main program did not play the validated full cycle')
+                        # Ignore earlier cold-boot fallback events: wait for THIS outage.
+                        activations=docker('logs',tag+'-liquidsoap').count('EMERGENCY active')
                         # Stop the whole planner process, not just one mocked method.
                         docker('pause',tag+'-catalog')
-                        wait_for(lambda: 'EMERGENCY active' in docker('logs',tag+'-liquidsoap'),
+                        wait_for(lambda: docker('logs',tag+'-liquidsoap').count('EMERGENCY active')>activations,
                                  'Fallback never activated after prefetch drained')
                         time.sleep(6) # Move past the Icecast burst of formerly queued main audio.
                         with urllib.request.urlopen(base+'/alce.mp3',timeout=15) as response:
@@ -170,8 +172,9 @@ def main():
                         rms=[math.sqrt(sum(value*value for value in window)/len(window)) for window in windows]
                         assert len(rms)>=20 and min(rms)>100, ('Emergency silent 100ms window', rms)
                         # Restore the same planner; fallback history safety is covered by unit tests.
+                        resumptions=docker('logs',tag+'-liquidsoap').count('EMERGENCY ended / planner resumed')
                         docker('unpause',tag+'-catalog')
-                        wait_for(lambda: 'EMERGENCY ended / planner resumed' in docker('logs',tag+'-liquidsoap'),
+                        wait_for(lambda: docker('logs',tag+'-liquidsoap').count('EMERGENCY ended / planner resumed')>resumptions,
                                  'Main program failed to resume at a natural boundary')
                         time.sleep(5)
                         logs=docker('logs',tag+'-liquidsoap')
