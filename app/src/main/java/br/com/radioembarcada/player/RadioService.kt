@@ -55,6 +55,7 @@ class RadioService : MediaLibraryService() {
         session = MediaLibrarySession.Builder(this, exposedPlayer, LibraryCallback())
             .setSessionActivity(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)).build()
+        addSession(session)
         network.start()
         publishState()
     }
@@ -70,6 +71,15 @@ class RadioService : MediaLibraryService() {
             putBoolean(CONNECTED_KEY, network.isConnected)
             putString(MESSAGE_KEY, "") // Technical details only in DEBUG logs.
         })
+    }
+
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        super.onUpdateNotification(session, startInForegroundRequired)
+        if (BuildConfig.DEBUG) Log.d("RadioDiagnostics",
+            "Live service: foregroundRequired=$startInForegroundRequired; " +
+                "state=${player.playbackState}; requested=${playback.requested}; " +
+                "playing=${player.isPlaying}; loading=${player.isLoading}; " +
+                "bufferedMs=${player.totalBufferedDuration}")
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession = session

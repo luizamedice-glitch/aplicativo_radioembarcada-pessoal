@@ -16,9 +16,11 @@ enum class PlaybackMode {
 
 object LiveStreamConfiguration {
     val url: String get() = BuildConfig.RADIO_STREAM_URL
-    const val MIN_BUFFER_MS = 5_000
-    const val MAX_BUFFER_MS = 15_000
+    const val MIN_BUFFER_MS = 10_000
+    const val MAX_BUFFER_MS = 20_000
     const val START_BUFFER_MS = 1_500
-    const val REBUFFER_MS = 3_000
-    const val SOURCE_RETRY_LIMIT = 3
+    const val REBUFFER_MS = 5_000
+    // 16 KiB is approximately one second at the station's 128 kbit/s.
+    const val LOADING_CHECK_INTERVAL_BYTES = 16 * 1024
+    const val READ_TIMEOUT_MS = 30_000
 }

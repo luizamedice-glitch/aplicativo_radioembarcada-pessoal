@@ -40,8 +40,8 @@ android {
         applicationId = "br.com.radioembarcada"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.6.1"
         buildConfigField("String", "PLAYBACK_MODE", JsonOutput.toJson(playbackMode))
         buildConfigField("String", "RADIO_STREAM_URL", JsonOutput.toJson(radioStreamUrl))
         manifestPlaceholders["radioServiceClass"] = if (playbackMode == "STREAM") ".player.RadioService" else ".player.LocalFallbackRadioService"

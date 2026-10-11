@@ -9,6 +9,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.test.utils.FakeMediaSource
+import org.robolectric.Shadows.shadowOf
 import androidx.media3.test.utils.FakeClock
 import androidx.media3.test.utils.FakeMediaSourceFactory
 import androidx.media3.test.utils.FakeRenderer
@@ -53,18 +55,48 @@ class LiveStreamSessionTest {
     @Test fun creatingStreamServiceDoesNotInitializeAnyLocalProgramming() {
         val service = Robolectric.buildService(RadioService::class.java).create()
         try {
+            assertEquals(1, service.get().sessions.size)
             val app = service.get().application as RadioApplication
             assertThrows(IllegalStateException::class.java) { app.programming }
             assertThrows(IllegalStateException::class.java) { app.news }
         } finally { service.destroy() }
     }
+    @Test fun serviceRemainsForegroundDuringRebufferingWithoutActivityAndReleasesAfterPause() {
+        val lifecycle = Robolectric.buildService(RadioService::class.java).create()
+        val service = lifecycle.get()
+        // Replace the HTTP source with a source that stays BUFFERING; no Activity or network.
+        val field = RadioService::class.java.getDeclaredField("player").apply { isAccessible = true }
+        val player = field.get(service) as ExoPlayer
+        try {
+            player.setMediaSource(FakeMediaSource().apply { setAllowPreparation(false) })
+            player.prepare()
+            player.play()
+            runMainLooperUntil { service.isPlaybackOngoing }
+            assertEquals(Player.STATE_BUFFERING, player.playbackState)
+            assertNotNull(shadowOf(service).lastForegroundNotification)
+            player.pause()
+            player.stop()
+            // Media3 intentionally keeps a grace period after playback stops.
+            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMinutes(11))
+            runMainLooperUntil { !service.isPlaybackOngoing }
+        } finally { lifecycle.destroy() }
+    }
+
     @Test fun notificationAndAutoControllersKeepLiveIdentityWithoutSeekOrSkip() {
         val app = (RuntimeEnvironment.getApplication() as RadioApplication)
         val station = LiveStreamPlayer.station(app, "alce", "Rádio Alce")
         val player = ExoPlayer.Builder(app, RenderersFactory { _, _, _, _, _ -> arrayOf(FakeRenderer(C.TRACK_TYPE_AUDIO)) })
             .setMediaSourceFactory(FakeMediaSourceFactory()).setClock(FakeClock(true)).build()
         val exposed = StationSessionPlayer(player, station.mediaMetadata)
-        val session = MediaLibrarySession.Builder(app, exposed, RadioSessionCallback()).build()
+        val session = MediaLibrarySession.Builder(app, exposed, RadioSessionCallback())
+            // Keep artwork identity but use a tiny bitmap fixture instead of parceling a 1280px
+            // logo repeatedly through Robolectric's expensive legacy Bitmap shadow.
+            .setBitmapLoader(object : androidx.media3.common.util.BitmapLoader {
+                private val image = android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
+                override fun supportsMimeType(mimeType: String) = true
+                override fun decodeBitmap(data: ByteArray) = com.google.common.util.concurrent.Futures.immediateFuture(image)
+                override fun loadBitmap(uri: android.net.Uri) = com.google.common.util.concurrent.Futures.immediateFuture(image)
+            }).build()
         val controllers = mutableListOf<MediaController>()
         try {
             player.setMediaItem(station); player.prepare()
@@ -105,10 +137,10 @@ class LiveStreamSessionTest {
         } finally { controllers.forEach { it.release() }; session.release(); player.release() }
     }
     @Test fun liveBufferIsBoundedAndStartsQuicklyWithoutOldFilePreloadSettings() {
-        assertEquals(5_000, LiveStreamConfiguration.MIN_BUFFER_MS)
-        assertEquals(15_000, LiveStreamConfiguration.MAX_BUFFER_MS)
+        assertEquals(10_000, LiveStreamConfiguration.MIN_BUFFER_MS)
+        assertEquals(20_000, LiveStreamConfiguration.MAX_BUFFER_MS)
         assertEquals(1_500, LiveStreamConfiguration.START_BUFFER_MS)
-        assertEquals(3_000, LiveStreamConfiguration.REBUFFER_MS)
+        assertEquals(5_000, LiveStreamConfiguration.REBUFFER_MS)
         assertTrue(LiveStreamConfiguration.MAX_BUFFER_MS < PlaybackConfiguration.MAX_BUFFER_MS)
     }
     @Test fun cleartextIsAllowedOnlyForProvisionalHost() {

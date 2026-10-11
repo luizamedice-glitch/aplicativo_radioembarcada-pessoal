@@ -15,7 +15,6 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 
 /** No catalogue, queue, transition envelope, audio disk cache or saved live position. */
 @UnstableApi
@@ -34,9 +33,9 @@ internal object LiveStreamPlayer {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent("RadioAlce/" + br.com.radioembarcada.BuildConfig.VERSION_NAME)
             .setConnectTimeoutMs(PlaybackConfiguration.CONNECT_TIMEOUT_MS)
-            .setReadTimeoutMs(PlaybackConfiguration.READ_TIMEOUT_MS)
+            .setReadTimeoutMs(LiveStreamConfiguration.READ_TIMEOUT_MS)
         val sources = ProgressiveMediaSource.Factory(http, radioExtractors())
-            .setContinueLoadingCheckIntervalBytes(PlaybackConfiguration.LOADING_CHECK_INTERVAL_BYTES)
+            .setContinueLoadingCheckIntervalBytes(LiveStreamConfiguration.LOADING_CHECK_INTERVAL_BYTES)
             .setLoadErrorHandlingPolicy(LiveStreamLoadErrorPolicy())
         return ExoPlayer.Builder(context).setMediaSourceFactory(sources)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(
@@ -52,13 +51,12 @@ internal object LiveStreamPlayer {
     }
 }
 
-/** Brief in-place loader retries, then reconnect from the current Icecast signal. */
+/** Keep transient failures inside Media3: BUFFERING retains foreground and network wake locks.
+ * ProgressiveMediaPeriod drains buffered live audio before reopening the current signal.
+ * Permanent format/HTTP errors still reach LiveStreamPlayback's capped reconnection loop.
+ */
 @UnstableApi
-internal class LiveStreamLoadErrorPolicy : RadioLoadErrorPolicy(finiteRetries = true) {
-    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
-        if (loadErrorInfo.errorCount >= LiveStreamConfiguration.SOURCE_RETRY_LIMIT) C.TIME_UNSET
-        else super.getRetryDelayMsFor(loadErrorInfo)
-}
+internal class LiveStreamLoadErrorPolicy : RadioLoadErrorPolicy()
 
 /** Suppress ICY/ID3 presentation even if a decoder later reports track metadata. */
 @UnstableApi
@@ -86,9 +84,44 @@ internal open class StationSessionPlayer(player: Player, private val identity: M
                 }
         }
     }
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun addListener(listener: Player.Listener) {
         if (listener in listeners) return
-        val fixed = object : Player.Listener by listener {
+        // Java default interface methods are NOT forwarded by Kotlin `by listener`.
+        // Forward explicitly so MediaSession/notification receives playWhenReady, state and errors.
+        val fixed = object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { listener.onMediaItemTransition(mediaItem, reason) }
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { listener.onTracksChanged(tracks) }
+            override fun onIsLoadingChanged(isLoading: Boolean) { listener.onIsLoadingChanged(isLoading) }
+            override fun onLoadingChanged(isLoading: Boolean) { listener.onLoadingChanged(isLoading) }
+            override fun onTrackSelectionParametersChanged(parameters: androidx.media3.common.TrackSelectionParameters) { listener.onTrackSelectionParametersChanged(parameters) }
+            override fun onPlayerStateChanged(playWhenReady: Boolean, state: Int) { listener.onPlayerStateChanged(playWhenReady, state) }
+            override fun onPlaybackStateChanged(state: Int) { listener.onPlaybackStateChanged(state) }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { listener.onPlayWhenReadyChanged(playWhenReady, reason) }
+            override fun onPlaybackSuppressionReasonChanged(reason: Int) { listener.onPlaybackSuppressionReasonChanged(reason) }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { listener.onIsPlayingChanged(isPlaying) }
+            override fun onRepeatModeChanged(repeatMode: Int) { listener.onRepeatModeChanged(repeatMode) }
+            override fun onShuffleModeEnabledChanged(enabled: Boolean) { listener.onShuffleModeEnabledChanged(enabled) }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { listener.onPlayerError(error) }
+            override fun onPlayerErrorChanged(error: androidx.media3.common.PlaybackException?) { listener.onPlayerErrorChanged(error) }
+            override fun onPositionDiscontinuity(reason: Int) { listener.onPositionDiscontinuity(reason) }
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) { listener.onPositionDiscontinuity(oldPosition, newPosition, reason) }
+            override fun onPlaybackParametersChanged(parameters: androidx.media3.common.PlaybackParameters) { listener.onPlaybackParametersChanged(parameters) }
+            override fun onSeekBackIncrementChanged(increment: Long) { listener.onSeekBackIncrementChanged(increment) }
+            override fun onSeekForwardIncrementChanged(increment: Long) { listener.onSeekForwardIncrementChanged(increment) }
+            override fun onMaxSeekToPreviousPositionChanged(position: Long) { listener.onMaxSeekToPreviousPositionChanged(position) }
+            override fun onAudioSessionIdChanged(id: Int) { listener.onAudioSessionIdChanged(id) }
+            override fun onAudioAttributesChanged(attributes: AudioAttributes) { listener.onAudioAttributesChanged(attributes) }
+            override fun onVolumeChanged(volume: Float) { listener.onVolumeChanged(volume) }
+            override fun onSkipSilenceEnabledChanged(enabled: Boolean) { listener.onSkipSilenceEnabledChanged(enabled) }
+            override fun onDeviceInfoChanged(deviceInfo: androidx.media3.common.DeviceInfo) { listener.onDeviceInfoChanged(deviceInfo) }
+            override fun onDeviceVolumeChanged(volume: Int, muted: Boolean) { listener.onDeviceVolumeChanged(volume, muted) }
+            override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) { listener.onVideoSizeChanged(size) }
+            override fun onSurfaceSizeChanged(width: Int, height: Int) { listener.onSurfaceSizeChanged(width, height) }
+            override fun onRenderedFirstFrame() { listener.onRenderedFirstFrame() }
+            override fun onCues(cues: MutableList<androidx.media3.common.text.Cue>) { listener.onCues(cues) }
+            override fun onCues(cues: androidx.media3.common.text.CueGroup) { listener.onCues(cues) }
+            override fun onMetadata(metadata: androidx.media3.common.Metadata) { listener.onMetadata(metadata) }
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) { listener.onMediaMetadataChanged(identity) }
             override fun onPlaylistMetadataChanged(mediaMetadata: MediaMetadata) { listener.onPlaylistMetadataChanged(identity) }
             override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {

@@ -65,19 +65,31 @@ descartando o buffer antigo. Retomar ou reabrir nunca restaura posição de podc
 Player e sessão não são recriados a cada comando. Não existe cache de disco do
 stream: reutilizar bytes de uma sessão anterior atrasaria a transmissão.
 
-`LiveStreamConfiguration` centraliza buffer mínimo **5 s**, máximo **15 s**, início
-**1,5 s** e rebuffer **3 s**; não usa o buffer de 90 s do fallback musical. A fonte
-progressiva é ao vivo, sem duração falsa, seek ou navegação. O carregador faz até
-três tentativas por falha; erros terminais/fim do sinal abrem uma nova conexão com
+`LiveStreamConfiguration` centraliza buffer mínimo **10 s**, máximo **20 s**, início
+**1,5 s** e rebuffer **5 s**; não usa o buffer de 90 s do fallback musical. A fonte
+progressiva é ao vivo, sem duração falsa, seek ou navegação. Falhas transitórias são
+recuperadas dentro do carregador Media3 com backoff limitado, sem encerrar a fonte
+a cada três erros: isso mantém BUFFERING, foreground e wake locks durante a
+recuperação. O Media3 consome primeiro o áudio em buffer antes de reabrir o sinal
+ao vivo. Erros permanentes/fim do sinal abrem uma nova conexão com
 backoff **1, 2, 4, 8, 16, 32 s**, limitado a 32 s. O contador só reinicia após reprodução
 real. Sem rede, não há loops de requests; buffer audível continua até acabar. A volta
 da rede recupera o sinal parado sem recriar o player; troca saudável não o reinicia.
-Pause e perda de foco cancelam retries. Não há healthcheck/polling extra.
+Pause encerra o carregador e os retries; perda de foco é respeitada. Não há
+healthcheck/polling extra. A verificação de carregamento usa blocos de 16 KiB
+(aproximadamente 1 s a 128 kbit/s), menores que o buffer de início, e timeout de
+leitura de 30 s para tolerar variações de rede sem desconectar prematuramente.
+A quantidade real de áudio disponível depende também do envio do servidor.
 
 MediaSession e o callback compartilhado mantêm somente Play/Pause e consultas,
 sem Next/Previous/Seek/shuffle. Android Auto navega por uma única estação; Bluetooth,
 headset, notificação e lock screen usam a mesma restrição. Audio Focus, noisy,
-wake lock de rede e foreground de MediaLibraryService permanecem. Logs técnicos
+wake lock de rede e foreground de MediaLibraryService permanecem. O wrapper de
+identidade repassa explicitamente todos os callbacks de estado: delegação Kotlin
+`by listener` não encaminha métodos padrão Java de Player.Listener. Sem esse
+repasse, o controlador da notificação podia permanecer com Play/Pause desatualizado
+e deixar de promover o serviço a foreground durante a reprodução. A sessão é
+registrada no serviço desde onCreate. Logs técnicos
 somente DEBUG; a UI mostra apenas a identidade e animação conforme o estado.
 
 ## Validação e APK
@@ -103,6 +115,11 @@ Teste manual com **dois dispositivos**:
 
 Testes usam fontes/players simulados e Robolectric, sem depender do stream real.
 A validação automática não substitui ouvir dois aparelhos ou testar o veículo.
+Para regressão em segundo plano, teste 15–30 minutos com outro aplicativo aberto
+e depois com tela apagada, tanto em Wi-Fi como em dados móveis. Confira que a
+notificação permanece e que Pause interrompe o áudio. Se o problema persistir,
+registre `adb logcat -s RadioDiagnostics ExoPlayerImpl` durante o travamento;
+os logs DEBUG incluem estado, buffer e exigência de foreground, sem URLs ou secrets.
 
 ## Regras a migrar para o servidor
 

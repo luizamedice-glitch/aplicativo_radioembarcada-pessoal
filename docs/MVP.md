@@ -7,8 +7,14 @@ stream único → APK/ExoPlayer/MediaLibraryService. URL provisória centralizad
 BuildConfig.RADIO_STREAM_URL; HTTP restrito ao IP autorizado, migrar para domínio HTTPS.
 RadioService não acessa providers, programação, notícias ou histórico locais.
 Play/reconexão reabre o sinal atual; Pause fecha a fonte sem recriar player/sessão.
-Sem cache de disco de stream; buffer 5–15 s, início 1,5 s, retry/backoff até 32 s.
+Sem cache de disco de stream; buffer 10–20 s, início 1,5 s, rebuffer 5 s, retry/backoff até 32 s.
+Falhas transitórias permanecem no carregador Media3 (BUFFERING/foreground/wake
+locks), sem término forçado após três falhas. Verificações a cada 16 KiB e timeout
+de leitura de 30 s; Pause encerra a fonte. Diagnóstico técnico somente DEBUG.
 Controles externos somente Play/Pause, metadados fixos e layout existente preservados.
+O wrapper de identidade encaminha explicitamente callbacks de Player.Listener,
+incluindo playWhenReady/playbackState, para manter o controlador da notificação
+e o foreground sincronizados. Delegação Kotlin de métodos padrão Java é evitada.
 
 A implementação anterior integral está em LocalFallbackRadioService, disponível
 somente por build LOCAL_FALLBACK explícito, sem troca automática. Manifest/Controller
