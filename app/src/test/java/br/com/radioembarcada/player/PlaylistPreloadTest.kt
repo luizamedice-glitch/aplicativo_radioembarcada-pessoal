@@ -121,6 +121,20 @@ class PlaylistPreloadTest {
             assertEquals("music1", player.currentMediaItem?.mediaId)
             assertEquals(0, endedCount)
             assertTrue(readiness.get("station").ready)
+            // Inspect real selected/buffered samples before each safe boundary. Timer log
+            // delivery is asynchronous and is not proof that a MediaPeriod is ready.
+            val insertsPreparedBeforeBoundary = mutableSetOf<String>()
+            for (index in items.indices) {
+                val following = items.getOrNull(index + 1) ?: continue
+                if (items[index].type != ProgramItemType.MUSIC) continue
+                player.play()
+                advance(player).untilPosition(index, items[index].durationMs - 14_000)
+                player.pause()
+                advance(player).untilPendingCommandsAreFullyHandled()
+                assertTrue("Peça ${following.id} deve estar preparada antes do fim: ${readiness.get(following.id)}",
+                    readiness.get(following.id).ready)
+                insertsPreparedBeforeBoundary += following.id
+            }
             player.play()
             advance(player).untilState(Player.STATE_ENDED)
             assertEquals(items.drop(1).map { it.id }, transitions)
@@ -130,9 +144,7 @@ class PlaylistPreloadTest {
             assertTrue(logs.any { "Next MediaItem in timeline: true" in it && "Next ready for immediate playback: true" in it })
             for (id in listOf("station") + (2..7).map { "station$it" }) {
                 assertEquals(8_000L, ends[id])
-                assertTrue("Peça $id deve usar o mesmo preload real", logs.any {
-                    "inserção=$id;" in it && "next item preloaded=true" in it
-                })
+                assertTrue("Peça $id deve usar o mesmo preload real", id in insertsPreparedBeforeBoundary)
             }
         } finally { envelope.release(); player.release() }
         assertFalse(readiness.get("station").ready) // Buffer liberado não fica marcado ready.
