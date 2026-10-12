@@ -218,6 +218,12 @@ jobs:
           aws s3api list-objects-v2 --bucket "$R2_BUCKET" \
             --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
             --query 'Contents[].{key:Key,size:Size,modified:LastModified}' --output json > /tmp/r2-inventory.json
+          python3 - <<'PYTHON'
+          import json
+          for item in json.load(open('/tmp/r2-inventory.json')):
+              if item['key'].lower().endswith('.mp3') and not item['key'].startswith('music/'):
+                  print(json.dumps(item, ensure_ascii=False))
+          PYTHON
       - uses: actions/upload-artifact@v4
         with:
           name: r2-inventory
