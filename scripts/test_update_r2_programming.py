@@ -41,7 +41,7 @@ class ProgrammingUpdateTest(unittest.TestCase):
         result = merge(self.current, items)
         self.assertEqual(2, len(items))
         self.assertTrue(all(item['type'] == 'JINGLE' for item in items))
-        self.assertEqual(self.current['jingles'] + items, result['jingles'])
+        self.assertEqual(self.current['jingles'] + [{k: v for k, v in item.items() if k != 'replacesUrl'} for item in items], result['jingles'])
         self.assertEqual(self.current['stationIds'], result['stationIds'])
         self.assertEqual(self.current['rules'], result['rules'])
         self.assertEqual(6, result['version'])
@@ -55,3 +55,22 @@ class ProgrammingUpdateTest(unittest.TestCase):
     def test_unsupported_type_is_rejected(self):
         with self.assertRaises(ValueError):
             merge(self.current, [dict(self.item, type='ADVERTISEMENT')])
+
+    def test_explicit_url_replacement_preserves_id_and_pool(self):
+        self.current['stationIds'] = [self.item]
+        replacement = dict(self.item, url=self.item['url'].replace('new.mp3', 'corrected.mp3'),
+                           replacesUrl=self.item['url'])
+        result = merge(self.current, [replacement])
+        self.assertEqual(1, len(result['stationIds']))
+        self.assertEqual(replacement['url'], result['stationIds'][0]['url'])
+        self.assertNotIn('replacesUrl', result['stationIds'][0])
+        self.assertEqual(6, result['version'])
+        self.assertEqual(result, merge(result, [replacement]))
+        self.assertEqual(self.item, self.current['stationIds'][0])
+
+    def test_replacement_requires_exact_previous_url(self):
+        self.current['stationIds'] = [self.item]
+        replacement = dict(self.item, url=self.item['url'].replace('new.mp3', 'corrected.mp3'),
+                           replacesUrl='https://example.org/wrong.mp3')
+        with self.assertRaises(ValueError):
+            merge(self.current, [replacement])

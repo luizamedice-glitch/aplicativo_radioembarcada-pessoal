@@ -474,3 +474,8 @@ remota e acrescenta os itens ao pool `jingles`, preservando vinhetas e regras.
 O merge é idempotente e incrementa `version` somente quando há alteração.
 Os spots participam do shuffle-bag de jingles já existente; não criam um novo
 intervalo publicitário nem alteram o ciclo STATION_ID / STATION_ID / JINGLE.
+
+Para substituições autorizadas, o manifesto pode declarar `replacesUrl` com a URL
+anterior exata. O merge troca somente a URL do mesmo ID/tipo/título, falha se a
+referência remota divergir e não publica esse campo auxiliar. O Spot Bifão passou
+para `Spot_Bifao-Certo.mp3`; a URL nova também renova a chave do cache de áudio.

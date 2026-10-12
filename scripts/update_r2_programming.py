@@ -15,7 +15,9 @@ def merge(current, additions):
         pool = result[name]
         if not isinstance(pool, list) or len({item['id'] for item in pool}) != len(pool):
             raise ValueError('Invalid or duplicate items in ' + name)
-    for item in additions:
+    for addition in additions:
+        item = copy.deepcopy(addition)
+        replaces_url = item.pop('replacesUrl', None)
         url = urlsplit(item['url'])
         if (item.get('type') not in pools or not item.get('id') or not item.get('title')
                 or url.scheme != 'https' or url.hostname != 'pub-e38948fd737d4d969bb4e65eebed0249.r2.dev'
@@ -28,7 +30,12 @@ def merge(current, additions):
         existing = next((p for p in pool if p['id'] == item['id']), None)
         if existing is not None:
             if existing != item:
-                raise ValueError('Conflicting existing item: ' + item['id'])
+                expected = dict(existing, url=item['url'])
+                if not replaces_url or existing.get('url') != replaces_url or expected != item:
+                    raise ValueError('Conflicting existing item: ' + item['id'])
+                if any(p is not existing and p.get('url') == item['url'] for p in pool):
+                    raise ValueError('Audio URL already registered with another ID')
+                existing['url'] = item['url']
         elif any(p.get('url') == item['url'] for p in pool):
             raise ValueError('Audio URL already registered with another ID')
         else:

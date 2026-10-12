@@ -3,7 +3,8 @@
     "id": "jingle-spot-bifao",
     "type": "JINGLE",
     "title": "Spot Bifão",
-    "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Spot_Bifao_Alce_Radio_Masterizado.mp3"
+    "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Spot_Bifao-Certo.mp3",
+    "replacesUrl": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Spot_Bifao_Alce_Radio_Masterizado.mp3"
   },
   {
     "id": "jingle-spot-salao-flack",
