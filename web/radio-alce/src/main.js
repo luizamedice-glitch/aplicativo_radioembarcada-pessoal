@@ -6,9 +6,11 @@ const button = document.querySelector('.play-pause');
 const badge = document.querySelector('.live-badge');
 const status = document.querySelector('#status');
 const wave = waveform(document.querySelector('canvas'));
-let requested = false, playing = false, attempt = 0, generation = 0, retryTimer, watchdog;
+let requested = false, playing = false, attempt = 0, generation = 0, retryTimer, watchdog, loadingTimer;
+const loading = document.querySelector('.loading-program');
+const loadingSeconds = document.querySelector('.loading-seconds');
 function render() {
-  radio.classList.toggle('is-requested', requested); radio.classList.toggle('is-playing', playing);
+  radio.classList.toggle('is-requested', requested); radio.classList.toggle('is-playing', playing); radio.classList.toggle('is-loading', requested && !playing);
   button.setAttribute('aria-label', requested ? 'Pausar rádio' : 'Reproduzir rádio');
   button.setAttribute('aria-pressed', String(requested));
   button.setAttribute('aria-busy', String(requested && !playing));
@@ -16,8 +18,14 @@ function render() {
   badge.setAttribute('aria-label', label); status.textContent = label; wave.setActive(playing);
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
 }
+function stopLoadingTimer() { clearInterval(loadingTimer); loadingTimer = undefined; loadingSeconds.textContent = '0'; }
+function startLoadingTimer() {
+  stopLoadingTimer();
+  let seconds = 0; loadingSeconds.textContent = String(seconds);
+  loadingTimer = setInterval(() => { loadingSeconds.textContent = String(++seconds); }, 1000);
+}
 function pause() {
-  requested = false; playing = false; generation++; attempt = 0;
+  requested = false; playing = false; generation++; attempt = 0; stopLoadingTimer();
   clearTimeout(retryTimer); retryTimer = undefined; clearTimeout(watchdog);
   audio.pause(); audio.removeAttribute('src'); audio.load(); render();
 }
@@ -36,9 +44,9 @@ function connect() {
     if (error.name === 'NotAllowedError') pause(); else if (error.name !== 'AbortError') retry();
   });
 }
-function play() { if (requested) return; requested = true; render(); connect(); }
+function play() { if (requested) return; requested = true; startLoadingTimer(); render(); connect(); }
 button.addEventListener('click', () => requested ? pause() : play());
-audio.addEventListener('playing', () => { if (!requested) return; playing = true; attempt = 0; clearTimeout(retryTimer); retryTimer = undefined; clearTimeout(watchdog); render(); });
+audio.addEventListener('playing', () => { if (!requested) return; playing = true; attempt = 0; stopLoadingTimer(); clearTimeout(retryTimer); retryTimer = undefined; clearTimeout(watchdog); render(); });
 audio.addEventListener('waiting', () => { playing = false; render(); armWatchdog(); });
 audio.addEventListener('stalled', armWatchdog);
 audio.addEventListener('error', retry); audio.addEventListener('ended', retry);
