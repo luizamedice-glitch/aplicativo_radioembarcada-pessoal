@@ -50,7 +50,7 @@ for (const [id, change] of [['volume-down', -.1], ['volume-up', .1]]) document.g
   audio.volume = Math.min(1, Math.max(0, Math.round((audio.volume + change) * 10) / 10));
 });
 if ('mediaSession' in navigator) {
-  navigator.mediaSession.metadata = new MediaMetadata({ title: 'Rádio Alce', artist: 'AO VIVO', album: 'Sua Rádio em Movimento', artwork: [{ src: '/alce-logo.png', sizes: '1254x1254', type: 'image/png' }] });
+  navigator.mediaSession.metadata = new MediaMetadata({ title: 'Rádio Alce', artist: 'AO VIVO', album: 'Sua Rádio em Movimento', artwork: [{ src: '/radio-alce-media.png', type: 'image/png' }] });
   for (const [action, handler] of Object.entries({ play, pause, stop: pause, nexttrack: null, previoustrack: null, seekto: null, seekforward: null, seekbackward: null })) {
     try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* Unsupported browser action. */ }
   }
