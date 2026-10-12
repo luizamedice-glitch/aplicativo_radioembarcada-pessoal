@@ -37,7 +37,7 @@ def https_url(value):
     p = urlsplit(value or "")
     return p.scheme == "https" and bool(p.hostname) and p.username is None and p.password is None and p.port in (None, 443)
 
-def read_limited(url, limit=2_000_000):
+def read_limited(url, limit=10_000_000):
     if not https_url(url):
         raise ValueError("Non-HTTPS podcast URL")
     request = urllib.request.Request(url, headers={"User-Agent": "RadioAlcePrivateTest/1.0"})
