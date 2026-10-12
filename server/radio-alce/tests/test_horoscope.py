@@ -10,7 +10,7 @@ from horoscope import CHAPTER, SIGNS, HoroscopeProvider, parse_episodes, seconds
 def rss(date="12 de Outubro de 2026", timestamps=True):
     lines = [f"{i//60:02d}:{i%60:02d} - {sign}" for i, sign in
              zip(range(6, 6 + 12 * 42, 42), SIGNS)]
-    lines += ["08:30 - Encerramento"]
+    lines += ["08:30 - Mensagem Final"]
     description = "\n".join(lines) if timestamps else "sem marcas"
     return f"""<rss><channel><item><title>Horóscopo do Dia, Segunda-feira, {date}. Todos os signos.</title>
     <pubDate>Mon, 12 Oct 2026 11:00:00 GMT</pubDate>
