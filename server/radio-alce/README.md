@@ -2,6 +2,14 @@
 
 R2 → providers Python → programação/cache persistente → Liquidsoap → Icecast → um único sinal `/alce.mp3` MP3 128 kbps. O Android continua somente reproduzindo o stream; nenhuma regra foi reativada no APK.
 
+## Horóscopo — teste privado (branch feature/horoscopo-privado)
+
+O horóscopo está **desligado por padrão**. Para ativá-lo apenas na instância privada, definir `HOROSCOPE_PRIVATE_TEST=1` na `.env` do Compose e reconstruir o serviço `catalog` após validar a branch. Não habilitar para transmissão pública sem licença de retransmissão e edição.
+
+O módulo `horoscope.py` descobre o RSS pelo Apple Podcasts Lookup do podcast 1721237546, seleciona somente a edição diária da data local e valida os capítulos de Áries a Peixes e Encerramento. Divide o áudio em 12 arquivos MP3 locais com FFmpeg; a gravação original não é publicada no R2. Cada horário entre **07:00 e 18:59** corresponde a um signo em ordem. Uma inserção começa na próxima fronteira segura entre músicas; notícias têm prioridade. O bloco de horóscopo substitui a vinheta/jingle daquele intervalo, preservando a reserva institucional para a próxima fronteira pela própria política de prioridades do planner. A faixa não é cortada, e nenhuma vinheta extra é anexada ao signo. O MP3 só é agendado após download e verificação da integridade. Histórico de slot tocado fica no SQLite e é confirmado no início real.
+
+Se o episódio não sair, faltar marcação, a fonte estiver fora do ar ou o áudio falhar, a rádio segue normalmente sem bloco de horóscopo. Este protótipo não foi implantado na EC2 e ainda exige testes com RSS real, escuta dos 12 recortes e validação do stream antes de habilitar o teste. Os trechos são apenas para avaliação privada de viabilidade; o podcast é protegido por direitos do produtor.
+
 ## Programação
 
 `config.py` centraliza URLs públicas, intervalos, ganhos e retenção. O sincronizador consulta `music_catalog.json` e `programming.json` a cada 60 s, valida e salva snapshots atomicamente. Falhas preservam a última configuração válida. Uma versão nova reconstrói bags na próxima seleção; itens já entregues ao decoder terminam normalmente. Não é necessário rebuild do APK ou restart para atualizar os pools. Quantidades são dinâmicas (na consulta desta implementação: catálogo versão 4, 46 músicas; programação versão 5, oito vinhetas e três jingles).
