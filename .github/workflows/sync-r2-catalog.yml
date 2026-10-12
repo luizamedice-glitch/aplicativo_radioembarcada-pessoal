@@ -7,7 +7,7 @@ on:
         description: Catálogo musical ou inclusão das vinhetas aprovadas
         type: choice
         default: music
-        options: [music, programming]
+        options: [music, programming, inventory]
 
 concurrency:
   group: r2-library-publication
@@ -69,7 +69,7 @@ jobs:
           echo "Acesso ao bucket '$R2_BUCKET': OK"
 
   sync:
-    if: inputs.operation != 'programming'
+    if: inputs.operation == 'music'
     name: 3 - Regenerar e publicar catálogo
     needs: r2_access
     runs-on: ubuntu-latest
@@ -201,3 +201,26 @@ jobs:
           print(text)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f: f.write(text + '\n')
           PYTHON
+
+  inventory:
+    name: Inspecionar biblioteca R2 (somente leitura)
+    if: inputs.operation == 'inventory'
+    needs: r2_access
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Listar objetos disponíveis
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3api list-objects-v2 --bucket "$R2_BUCKET" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --query 'Contents[].{key:Key,size:Size,modified:LastModified}' --output json > /tmp/r2-inventory.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r2-inventory
+          path: /tmp/r2-inventory.json
+          retention-days: 1
+          if-no-files-found: error
