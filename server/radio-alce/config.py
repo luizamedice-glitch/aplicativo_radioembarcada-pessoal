@@ -30,3 +30,7 @@ GAINS = {'MUSIC': .9, 'STATION_ID': .8, 'JINGLE': .8, 'NEWS_INTRO': .8,
 TIME_ZONE = 'America/Sao_Paulo'
 # Do not claim HH:30 when the safe boundary is HH:34. Music is never interrupted.
 TIME_MAX_LATENESS = 60
+
+# Trial only. Must remain off until explicitly enabled in private EC2 .env.
+HOROSCOPE_PRIVATE_TEST = os.getenv('HOROSCOPE_PRIVATE_TEST', '0') == '1'
+GAINS['HOROSCOPE'] = .85
