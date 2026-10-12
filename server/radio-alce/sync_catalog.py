@@ -15,6 +15,7 @@ import config
 from audio_cache import AudioCache
 from catalogs import Catalogs, atomic_json
 from news import RemoteNewsProvider
+from horoscope import HoroscopeProvider
 from programming import ProgrammingEngine
 from storage import Storage
 from time_announcements import TimeAnnouncements
@@ -38,9 +39,11 @@ def request_uri(item, token):
 
 
 class Planner:
-    def __init__(self, catalogs, engine, cache, news, times, clock=time.time):
+    def __init__(self, catalogs, engine, cache, news, times, clock=time.time, horoscope=None):
         self.catalogs, self.engine, self.cache, self.news, self.times = catalogs, engine, cache, news, times
         self.clock = clock
+        self.horoscope = horoscope
+        self.horoscope_reserved = set()
         self.lock = threading.RLock()
         self.ready = deque()
         self.delivered = {}
@@ -125,6 +128,7 @@ class Planner:
                 self.ready.clear()
                 self.delivered.clear()
                 self.news_reserved.clear()
+                self.horoscope_reserved.clear()
                 self.current = self.tail = None
                 self.end_of_plan = self.clock()
                 self.sequence = 0
@@ -160,6 +164,14 @@ class Planner:
         inserts = None
         if self.engine.news_due(boundary):
             inserts = self._news_block(boundary)
+        if inserts is None and self.horoscope is not None:
+            try:
+                sign = self.horoscope.slot(boundary, self.engine.storage, self.horoscope_reserved)
+                if sign:
+                    self.horoscope_reserved.add(sign['horoscope_slot'])
+                    inserts = [sign]
+            except Exception as error:
+                log.warning('HOROSCOPE skipped safely: %s', type(error).__name__)
         if inserts is None:
             insertion = self.engine.insertion(self.catalogs.programming, self.cache.prepare)
             inserts = [insertion] if insertion else []
@@ -254,6 +266,10 @@ class Planner:
             self.engine.started(value['item'], value['checkpoint'])
             if value['item']['type'] == 'NEWS_DROP':
                 self.news_reserved.discard(value['item']['id'])
+            if value['item']['type'] == 'HOROSCOPE':
+                slot = value['item']['horoscope_slot']
+                self.engine.storage.put('horoscope_last_slot', slot)
+                self.horoscope_reserved.discard(slot)
             # Correct forecast to the real on-air start; all following items are already known.
             pending = [entry for entry in self.delivered.values() if not entry.get('started')] + list(self.ready)
             self.end_of_plan = self.clock() + value['item']['duration'] + sum(entry['item']['duration'] for entry in pending)
@@ -271,7 +287,8 @@ def run():
     catalogs = Catalogs(config.DATA)
     cache = AudioCache(config.DATA / 'cache')
     planner = Planner(catalogs, ProgrammingEngine(storage), cache, RemoteNewsProvider(),
-                      TimeAnnouncements(config.DATA / 'time'))
+                      TimeAnnouncements(config.DATA / 'time'),
+                      horoscope=HoroscopeProvider(config.DATA / 'horoscope') if config.HOROSCOPE_PRIVATE_TEST else None)
     stop = threading.Event()
 
     class Handler(BaseHTTPRequestHandler):
