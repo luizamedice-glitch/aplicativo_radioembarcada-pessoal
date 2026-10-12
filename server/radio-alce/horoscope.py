@@ -107,6 +107,14 @@ class HoroscopeProvider:
             return None
         if self._date != date_key:
             self._date, self._episode, self._next_attempt = date_key, None, 0
+            # Keep at most the most recent private preview recordings.
+            cutoff = self.clock() - 3 * 86400
+            for old in self.directory.glob("horoscope-*.mp3"):
+                try:
+                    if old.stat().st_mtime < cutoff:
+                        old.unlink()
+                except OSError:
+                    pass
         if self._episode is None and self.clock() >= self._next_attempt:
             try:
                 lookup = json.loads(self.fetch(APPLE_LOOKUP))
