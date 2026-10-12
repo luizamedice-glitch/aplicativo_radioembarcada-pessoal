@@ -22,6 +22,7 @@ services:
       FREETTS_API_KEY: ${FREETTS_API_KEY:-}
       FREETTS_VOICE: ${FREETTS_VOICE:-pt-BR-AntonioNeural}
       TZ: America/Sao_Paulo
+      HOROSCOPE_PRIVATE_TEST: ${HOROSCOPE_PRIVATE_TEST:-0}
     volumes:
       - radio-data:/data
     healthcheck:
