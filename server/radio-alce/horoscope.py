@@ -24,7 +24,7 @@ log = logging.getLogger("radio")
 SIGNS = ("Áries", "Touro", "Gêmeos", "Câncer", "Leão", "Virgem",
          "Libra", "Escorpião", "Sagitário", "Capricórnio", "Aquário", "Peixes")
 APPLE_LOOKUP = "https://itunes.apple.com/lookup?id=1721237546&entity=podcast"
-CHAPTER = re.compile(r"(?m)(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–:]\s*(Áries|Touro|Gêmeos|Câncer|Leão|Virgem|Libra|Escorpião|Sagitário|Capricórnio|Aquário|Peixes|Encerramento)\b", re.I)
+CHAPTER = re.compile(r"(?m)(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–:]\s*(Áries|Touro|Gêmeos|Câncer|Leão|Virgem|Libra|Escorpião|Sagitário|Capricórnio|Aquário|Peixes|Encerramento|Mensagem Final)\b", re.I)
 
 def seconds(value):
     out = 0
@@ -77,7 +77,7 @@ def parse_episodes(feed, date_key):
         desc = next((e.text or "" for e in item if e.tag.split("}")[-1] in ("description", "encoded") and e.text), "")
         desc = html.unescape(re.sub(r"<[^>]*>", " ", desc)).replace("\xa0", " ")
         matches = [(m.group(2).casefold(), seconds(m.group(1))) for m in CHAPTER.finditer(desc)]
-        if len(matches) < 13 or [n for n, _ in matches[:12]] != [s.casefold() for s in SIGNS] or matches[12][0] != "encerramento":
+        if len(matches) < 13 or [n for n, _ in matches[:12]] != [s.casefold() for s in SIGNS] or matches[12][0] not in ("encerramento", "mensagem final"):
             continue
         points = [t for _, t in matches[:13]]
         if points != sorted(set(points)) or points[0] < 0 or points[-1] > 3600:
