@@ -464,3 +464,13 @@ A arte nativa agora usa PNG sem perdas e logo cerca de 34% maior na altura, mant
 margem compatível com o cartão de aproximadamente 2,4:1 mostrado no aparelho.
 O sistema pode reduzir a resolução e aplicar escurecimento; validar a nitidez no
 celular após instalar o novo APK. Não há mudança de layout interno ou playback.
+
+### Inclusão dos spots como jingles
+
+Os spots Bifão e Salão Flack foram autorizados como `JINGLE` e estão declarados em
+`scripts/jingle-additions.json`. No workflow **Sincronizar catálogo R2**, usar
+`operation=jingles`: valida a existência dos MP3, guarda backup da configuração
+remota e acrescenta os itens ao pool `jingles`, preservando vinhetas e regras.
+O merge é idempotente e incrementa `version` somente quando há alteração.
+Os spots participam do shuffle-bag de jingles já existente; não criam um novo
+intervalo publicitário nem alteram o ciclo STATION_ID / STATION_ID / JINGLE.

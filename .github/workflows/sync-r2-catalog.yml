@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Catálogo musical ou inclusão das vinhetas aprovadas
+        description: Catálogo musical, peças aprovadas ou inventário
         type: choice
         default: music
-        options: [music, programming, inventory]
+        options: [music, programming, jingles, inventory]
 
 concurrency:
   group: r2-library-publication
@@ -147,12 +147,13 @@ jobs:
           PY
 
   programming:
-    name: Publicar vinhetas aprovadas
-    if: inputs.operation == 'programming'
+    name: Publicar peças aprovadas
+    if: inputs.operation == 'programming' || inputs.operation == 'jingles'
     needs: r2_access
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
+      ADDITIONS_FILE: ${{ inputs.operation == 'jingles' && 'scripts/jingle-additions.json' || 'scripts/station-id-additions.json' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
@@ -165,7 +166,7 @@ jobs:
           import json, os, subprocess
           from urllib.parse import unquote, urlsplit
           endpoint = 'https://' + os.environ['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
-          for item in json.load(open('scripts/station-id-additions.json')):
+          for item in json.load(open(os.environ['ADDITIONS_FILE'])):
               result = subprocess.check_output(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'],
                   '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint])
               assert json.loads(result)['ContentLength'] > 0
@@ -181,10 +182,10 @@ jobs:
           path: /tmp/programming-before.json
           retention-days: 30
           if-no-files-found: error
-      - name: Mesclar sem alterar regras ou jingles
+      - name: Mesclar preservando regras e peças existentes
         run: |
           python3 scripts/update_r2_programming.py --current /tmp/programming-before.json \
-            --additions scripts/station-id-additions.json --output /tmp/programming.json
+            --additions "$ADDITIONS_FILE" --output /tmp/programming.json
       - name: Publicar e conferir programação
         run: |
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"

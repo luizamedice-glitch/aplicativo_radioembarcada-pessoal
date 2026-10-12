@@ -1,4 +1,4 @@
-"""Merge approved station IDs without replacing remote rules, jingles or unknown fields."""
+"""Merge approved station IDs/jingles while preserving remote rules and unknown fields."""
 import argparse
 import copy
 import json
@@ -10,19 +10,25 @@ def merge(current, additions):
     if current.get('stationId') != 'alce' or not isinstance(current.get('version'), int):
         raise ValueError('Invalid remote programming identity/version')
     result = copy.deepcopy(current)
-    pool = result['stationIds']
-    if not isinstance(pool, list) or len({item['id'] for item in pool}) != len(pool):
-        raise ValueError('Invalid or duplicate station IDs')
+    pools = {'STATION_ID': 'stationIds', 'JINGLE': 'jingles'}
+    for name in pools.values():
+        pool = result[name]
+        if not isinstance(pool, list) or len({item['id'] for item in pool}) != len(pool):
+            raise ValueError('Invalid or duplicate items in ' + name)
     for item in additions:
         url = urlsplit(item['url'])
-        if (item.get('type') != 'STATION_ID' or not item.get('id') or not item.get('title')
+        if (item.get('type') not in pools or not item.get('id') or not item.get('title')
                 or url.scheme != 'https' or url.hostname != 'pub-e38948fd737d4d969bb4e65eebed0249.r2.dev'
                 or url.query or url.fragment or not url.path.endswith('.mp3')):
-            raise ValueError('Invalid station ID addition')
+            raise ValueError('Invalid programming addition')
+        pool = result[pools[item['type']]]
+        other = result['jingles' if item['type'] == 'STATION_ID' else 'stationIds']
+        if any(p['id'] == item['id'] or p.get('url') == item['url'] for p in other):
+            raise ValueError('Item already registered in another pool')
         existing = next((p for p in pool if p['id'] == item['id']), None)
         if existing is not None:
             if existing != item:
-                raise ValueError('Conflicting existing station ID: ' + item['id'])
+                raise ValueError('Conflicting existing item: ' + item['id'])
         elif any(p.get('url') == item['url'] for p in pool):
             raise ValueError('Audio URL already registered with another ID')
         else:

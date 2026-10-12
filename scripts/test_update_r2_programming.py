@@ -32,3 +32,26 @@ class ProgrammingUpdateTest(unittest.TestCase):
         from pathlib import Path
         items = json.loads(Path(__file__).with_name('station-id-additions.json').read_text())
         self.assertEqual(3, len(merge(self.current, items)['stationIds']))
+
+    def test_jingles_preserve_station_ids_rules_and_are_idempotent(self):
+        import json
+        from pathlib import Path
+        items = json.loads(Path(__file__).with_name('jingle-additions.json').read_text())
+        self.current['stationIds'] = [self.item]
+        result = merge(self.current, items)
+        self.assertEqual(2, len(items))
+        self.assertTrue(all(item['type'] == 'JINGLE' for item in items))
+        self.assertEqual(self.current['jingles'] + items, result['jingles'])
+        self.assertEqual(self.current['stationIds'], result['stationIds'])
+        self.assertEqual(self.current['rules'], result['rules'])
+        self.assertEqual(6, result['version'])
+        self.assertEqual(result, merge(result, items))
+
+    def test_cross_pool_conflicts_are_rejected(self):
+        self.current['stationIds'] = [self.item]
+        with self.assertRaises(ValueError):
+            merge(self.current, [dict(self.item, type='JINGLE')])
+
+    def test_unsupported_type_is_rejected(self):
+        with self.assertRaises(ValueError):
+            merge(self.current, [dict(self.item, type='ADVERTISEMENT')])
