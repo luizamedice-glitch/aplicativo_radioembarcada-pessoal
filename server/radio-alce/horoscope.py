@@ -136,7 +136,7 @@ class HoroscopeProvider:
             try:
                 subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y",
                                 "-ss", str(start), "-to", str(end), "-i", str(source),
-                                "-vn", "-c:a", "libmp3lame", "-b:a", "192k", str(temp)],
+                                "-vn", "-c:a", "libmp3lame", "-b:a", "192k", "-f", "mp3", str(temp)],
                                check=True, timeout=45, capture_output=True)
                 probe(temp)
                 temp.replace(target)
