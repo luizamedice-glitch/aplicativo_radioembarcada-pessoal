@@ -26,18 +26,42 @@ jobs:
       AWS_DEFAULT_REGION: auto
     steps:
       - uses: actions/checkout@v4
+      - name: Verificar ferramentas e credenciais
+        run: |
+          command -v aws >/dev/null || { echo "::error::AWS CLI indisponível"; exit 1; }
+          test -n "$AWS_ACCESS_KEY_ID" || { echo "::error::Secret R2_ACCESS_KEY_ID ausente"; exit 1; }
+          test -n "$AWS_SECRET_ACCESS_KEY" || { echo "::error::Secret R2_SECRET_ACCESS_KEY ausente"; exit 1; }
+          echo "Ferramentas e credenciais presentes (valores não exibidos)"
       - name: Testar merge e validar arquivos no bucket
         run: |
           python3 -m unittest discover -s scripts -p 'test_update_r2_programming.py' -v
           python3 - <<'PYTHON'
-          import json, os, subprocess
+          import json, os, subprocess, sys
           from urllib.parse import unquote, urlsplit
           endpoint = 'https://' + os.environ['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
-          for item in json.load(open(os.environ['ADDITIONS_FILE'])):
-              result = subprocess.check_output(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'],
-                  '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint])
-              assert json.loads(result)['ContentLength'] > 0
-              print('Audio available: ' + item['id'])
+          additions = json.load(open(os.environ['ADDITIONS_FILE']))
+          failures = []
+          for item in additions:
+              key = unquote(urlsplit(item['url']).path.lstrip('/'))
+              p = subprocess.run(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'],
+                '--key', key, '--endpoint-url', endpoint], capture_output=True, text=True)
+              if p.returncode:
+                  failures.append(key)
+                  print('::error::MP3 não encontrado ou inacessível no R2: ' + key)
+                  continue
+              size = json.loads(p.stdout).get('ContentLength', 0)
+              if size <= 0:
+                  failures.append(key)
+                  print('::error::Arquivo vazio no R2: ' + key)
+              else:
+                  print('VALIDADO: ' + key + ' (' + str(size) + ' bytes)')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Validação de vinhetas R2\n')
+              f.write(f'Verificados: {len(additions)} | Falhas: {len(failures)}\n\n')
+              for key in failures:
+                  f.write('- Arquivo ausente/inacessível: `' + key + '`\n')
+          if failures:
+              raise SystemExit('Publicação interrompida com segurança: ' + str(len(failures)) + ' arquivo(s) inválido(s).')
           PYTHON
       - name: Baixar configuração atual e guardar backup
         run: |
