@@ -180,7 +180,7 @@ jobs:
 
   programming:
     name: Publicar peças aprovadas
-    if: inputs.operation == 'programming' || inputs.operation == 'jingles'
+    if: ${{ always() && needs.r2_access.result == 'success' && (github.event.inputs.operation == 'programming' || github.event.inputs.operation == 'jingles') }}
     needs: r2_access
     runs-on: ubuntu-latest
     timeout-minutes: 10
