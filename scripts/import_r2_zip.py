@@ -30,6 +30,24 @@ def inspect_audio(path):
                     '-map', '0:a:0', '-f', 'null', '-'], capture_output=True, check=True, timeout=180)
 
 
+def import_track(target, name, known, upload, probe=inspect_audio):
+    digest = hashlib.sha256()
+    with target.open('rb') as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    sha = digest.hexdigest()
+    if sha in known:
+        return 'duplicates', {'file': name, 'key': known[sha]}
+    try:
+        probe(target)
+    except (ValueError, KeyError, subprocess.SubprocessError) as error:
+        return 'ignored', {'file': name, 'reason': 'invalid audio: ' + type(error).__name__}
+    key = IMPORT_PREFIX + sha + '/' + PurePosixPath(name.replace('\\', '/')).name
+    upload(target, key, sha)
+    known[sha] = key
+    return 'uploaded', {'file': name, 'key': key, 'bytes': target.stat().st_size}
+
+
 def import_archive(archive, work, known, upload, probe=inspect_audio):
     """known maps content SHA256 to an existing imported key; callbacks simplify tests."""
     report = {'uploaded': [], 'duplicates': [], 'ignored': []}
@@ -55,31 +73,17 @@ def import_archive(archive, work, known, upload, probe=inspect_audio):
                 continue
             target = Path(work) / 'track.mp3'
             try:
-                digest = hashlib.sha256()
                 size = 0
                 with source.open(entry) as src, target.open('wb') as dst:
                     while chunk := src.read(1024 * 1024):
                         size += len(chunk)
                         if size > MAX_TRACK_BYTES:
                             raise ValueError('Track exceeds size limit')
-                        digest.update(chunk)
                         dst.write(chunk)
                 if size != entry.file_size:
                     raise ValueError('ZIP size mismatch')
-                sha = digest.hexdigest()
-                if sha in known:
-                    report['duplicates'].append({'file': entry.filename, 'key': known[sha]})
-                    continue
-                try:
-                    probe(target)
-                except (ValueError, KeyError, subprocess.SubprocessError) as error:
-                    report['ignored'].append({'file': entry.filename, 'reason': 'invalid audio: ' + type(error).__name__})
-                    continue
-                key = IMPORT_PREFIX + sha + '/' + name
-                # Upload failures propagate: never label a network failure as corrupt audio.
-                upload(target, key, sha)
-                known[sha] = key
-                report['uploaded'].append({'file': entry.filename, 'key': key, 'bytes': size})
+                status, result = import_track(target, entry.filename, known, upload, probe)
+                report[status].append(result)
             finally:
                 target.unlink(missing_ok=True)
     if not report['uploaded'] and not report['duplicates']:
@@ -117,10 +121,11 @@ def main():
     parser.add_argument('--report', required=True)
     args = parser.parse_args()
     r2 = R2()
-    archives = sorted((x for x in r2.listing('uploads_zip/') if x['Key'].lower().endswith('.zip')),
-                      key=lambda x: x['Key'])
-    if not archives:
-        raise ValueError('No ZIPs found in uploads_zip/')
+    sources = r2.listing('uploads_zip/') + r2.listing('uploads-zip/')
+    archives = sorted((x for x in sources if x['Key'].lower().endswith('.zip')), key=lambda x: x['Key'])
+    tracks = sorted((x for x in sources if x['Key'].lower().endswith('.mp3')), key=lambda x: x['Key'])
+    if not archives and not tracks:
+        raise ValueError('No ZIPs or MP3s found in uploads_zip/ or uploads-zip/')
     known = {}
     for item in r2.listing(IMPORT_PREFIX):
         parts = item['Key'][len(IMPORT_PREFIX):].split('/')
@@ -128,6 +133,21 @@ def main():
             known[parts[0]] = item['Key']
     reports = []
     try:
+        for index, obj in enumerate(tracks, 1):
+            result = {'uploaded': [], 'duplicates': [], 'ignored': []}
+            if not 0 < obj['Size'] <= MAX_TRACK_BYTES:
+                result['ignored'].append({'file': obj['Key'], 'reason': 'size outside limits'})
+            else:
+                with tempfile.TemporaryDirectory(prefix='alce-r2-track-') as directory:
+                    target = Path(directory) / 'track.mp3'
+                    r2.download(obj['Key'], target)
+                    if target.stat().st_size != obj['Size']:
+                        raise ValueError('Downloaded track size mismatch')
+                    status, detail = import_track(target, obj['Key'], known, r2.upload)
+                    result[status].append(detail)
+            reports.append(dict(source=obj['Key'], **result))
+            if index % 10 == 0 or index == len(tracks):
+                print(f'MP3 processed: {index}/{len(tracks)}', flush=True)
         for obj in archives:
             print('ZIP: ' + json.dumps({'key': obj['Key'], 'bytes': obj['Size']}), flush=True)
             if not 0 < obj['Size'] <= MAX_ZIP_BYTES:
@@ -144,8 +164,10 @@ def main():
             print('IMPORT: ' + json.dumps({k: len(v) for k, v in result.items()}), flush=True)
     finally:
         Path(args.report).write_text(json.dumps(reports, ensure_ascii=False, indent=2) + '\n')
+    if not any(r['uploaded'] or r['duplicates'] for r in reports):
+        raise ValueError('No valid MP3s imported')
     summary = 'ZIPs: %s; MP3 enviados: %s; duplicados: %s; ignorados: %s.' % (
-        len(reports), sum(len(r['uploaded']) for r in reports),
+        len(archives), sum(len(r['uploaded']) for r in reports),
         sum(len(r['duplicates']) for r in reports), sum(len(r['ignored']) for r in reports))
     print(summary)
     if os.getenv('GITHUB_STEP_SUMMARY'):

@@ -500,3 +500,8 @@ Artifacts `music-catalog-backup` e `zip-import-report` retêm o catálogo anteri
 a relação dos objetos enviados por 30 dias. Falhas de upload abortam a publicação;
 os objetos já enviados podem ser reutilizados ao executar novamente. Credenciais
 continuam exclusivamente nos secrets R2 existentes do Actions.
+
+A importação também aceita a pasta `uploads-zip/` (com hífen) e MP3s já
+extraídos em subpastas de qualquer um dos dois prefixos. Usa a mesma validação e
+deduplicação por conteúdo. Arquivos de origem são preservados; ZIPs fora desses
+prefixos, como a biblioteca de Hora Certa, não são importados como música.

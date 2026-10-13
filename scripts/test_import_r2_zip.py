@@ -79,3 +79,14 @@ class ImportZipTest(unittest.TestCase):
         result = self.run_import([('tiny.mp3', tone.read_bytes()), ('broken.mp3', b'not audio')], inspect_audio)
         self.assertEqual(1, len(result['uploaded']))
         self.assertEqual(1, len(result['ignored']))
+
+    def test_loose_uploads_use_same_deduplication_as_zip(self):
+        from import_r2_zip import import_track
+        track = self.work / 'loose.mp3'
+        track.write_bytes(b'audio')
+        status, result = import_track(track, 'uploads-zip/album/track.mp3', self.known,
+                                      lambda *args: None, lambda path: None)
+        self.assertEqual('uploaded', status)
+        result = self.run_import([('another-name.mp3', b'audio')])
+        self.assertEqual(1, len(result['duplicates']))
+        self.assertEqual([], self.uploads)
