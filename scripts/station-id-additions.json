@@ -16,5 +16,23 @@
     "type": "STATION_ID",
     "title": "Vinheta Nova 5",
     "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta-nova5_Masterizada.mp3"
+  },
+  {
+    "id": "vinheta-alce-identificacao-voz-grave",
+    "type": "STATION_ID",
+    "title": "Identificação Rádio Alce",
+    "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Identificacao_Sem_Silencio_Final.mp3"
+  },
+  {
+    "id": "vinheta-alce-rock-internacional",
+    "type": "STATION_ID",
+    "title": "Rock Internacional Rádio Alce",
+    "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Rock_Sem_Silencio_Final.mp3"
+  },
+  {
+    "id": "vinheta-alce-disco-anos-80",
+    "type": "STATION_ID",
+    "title": "Disco Anos 80 Rádio Alce",
+    "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Disco80_Sem_Silencio_Final.mp3"
   }
 ]
