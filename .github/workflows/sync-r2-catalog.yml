@@ -254,7 +254,8 @@ jobs:
           python3 - <<'PYTHON'
           import json
           for item in json.load(open('/tmp/r2-inventory.json')):
-              if item['key'].lower().endswith('.mp3') and not item['key'].startswith('music/'):
+              if (item['key'].lower().endswith('.zip') or 'zip' in item['key'].lower()
+                      or (item['key'].lower().endswith('.mp3') and not item['key'].startswith('music/'))):
                   print(json.dumps(item, ensure_ascii=False))
           PYTHON
       - uses: actions/upload-artifact@v4
