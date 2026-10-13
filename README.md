@@ -479,3 +479,24 @@ Para substituições autorizadas, o manifesto pode declarar `replacesUrl` com a 
 anterior exata. O merge troca somente a URL do mesmo ID/tipo/título, falha se a
 referência remota divergir e não publica esse campo auxiliar. O Spot Bifão passou
 para `Spot_Bifao-Certo.mp3`; a URL nova também renova a chave do cache de áudio.
+
+### Importar músicas de ZIPs do R2
+
+No workflow existente **Sincronizar catálogo R2**, `operation=import_zip` processa
+os arquivos `.zip` em `uploads_zip/`, inclusive subpastas. Valida MP3 com FFprobe e
+decodificação FFmpeg, envia para `music/zip-imports/<SHA256>/<nome>.mp3` e só então
+regenera `music_catalog.json`. ZIPs originais, APK e programação institucional são
+preservados. Não é necessário reiniciar a rádio.
+
+O SHA256 evita duplicações entre ZIPs e em reexecuções desta importação; arquivos
+com mesmo nome e áudio diferente recebem chaves distintas. Não compara por áudio
+as faixas que já existiam fora de `music/zip-imports/`. Imagens e outros formatos
+são ignorados, assim como MP3 inválidos (relatório com motivo). ZIPs sem MP3 válido,
+criptografados, com links ou caminhos inseguros fazem o job falhar. Limites: 8 GiB
+por ZIP, 20 GiB descompactados e 150 MiB por faixa (limite do cache do servidor).
+Apenas um ZIP e uma faixa são mantidos temporariamente no runner por vez.
+
+Artifacts `music-catalog-backup` e `zip-import-report` retêm o catálogo anterior e
+a relação dos objetos enviados por 30 dias. Falhas de upload abortam a publicação;
+os objetos já enviados podem ser reutilizados ao executar novamente. Credenciais
+continuam exclusivamente nos secrets R2 existentes do Actions.

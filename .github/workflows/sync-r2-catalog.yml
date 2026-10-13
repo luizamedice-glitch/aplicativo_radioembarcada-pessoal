@@ -7,7 +7,7 @@ on:
         description: Catálogo musical, peças aprovadas ou inventário
         type: choice
         default: music
-        options: [music, programming, jingles, inventory]
+        options: [music, programming, jingles, inventory, import_zip]
 
 concurrency:
   group: r2-library-publication
@@ -69,11 +69,11 @@ jobs:
           echo "Acesso ao bucket '$R2_BUCKET': OK"
 
   sync:
-    if: inputs.operation == 'music'
+    if: inputs.operation == 'music' || inputs.operation == 'import_zip'
     name: 3 - Regenerar e publicar catálogo
     needs: r2_access
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -84,6 +84,47 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y awscli
           fi
+
+      - name: Baixar catálogo anterior
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp             "s3://${R2_BUCKET}/music_catalog.json"             /tmp/old_music_catalog.json             --endpoint-url "$ENDPOINT"
+
+      - name: Guardar backup do catálogo
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-catalog-backup
+          path: /tmp/old_music_catalog.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Preparar e testar importação ZIP
+        if: inputs.operation == 'import_zip'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          python3 -m unittest discover -s scripts -v
+
+      - name: Extrair, validar e importar MP3 dos ZIPs
+        if: inputs.operation == 'import_zip'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: python3 -u scripts/import_r2_zip.py --report /tmp/zip-import-report.json
+
+      - name: Guardar relatório de importação
+        if: always() && inputs.operation == 'import_zip'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-import-report
+          path: /tmp/zip-import-report.json
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Listar biblioteca atual
         env:
@@ -102,15 +143,6 @@ jobs:
           if count <= 0:
               raise SystemExit("Nenhum MP3 encontrado em music/")
           PY
-
-      - name: Baixar catálogo anterior
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-        run: |
-          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          aws s3 cp             "s3://${R2_BUCKET}/music_catalog.json"             /tmp/old_music_catalog.json             --endpoint-url "$ENDPOINT"           || echo '{}' > /tmp/old_music_catalog.json
 
       - name: Gerar catálogo
         run: |
