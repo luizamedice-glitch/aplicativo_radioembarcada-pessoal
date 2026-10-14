@@ -7,7 +7,7 @@ on:
         description: Catálogo musical, peças aprovadas ou inventário
         type: choice
         default: music
-        options: [music, programming, jingles, inventory, import_zip, flatten_music]
+        options: [music, programming, jingles, inventory, import_zip, flatten_music, restore_programming]
 
 concurrency:
   group: r2-library-publication
@@ -289,3 +289,52 @@ jobs:
           if-no-files-found: error
       - name: Copiar, verificar, atualizar catálogo e remover caminhos antigos
         run: python3 -u scripts/flatten_r2_music.py --stage apply --directory /tmp/flatten-music
+
+  restore_programming:
+    name: Restaurar configuração completa de programação
+    if: inputs.operation == 'restore_programming'
+    needs: r2_access
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: programming-backup
+          run-id: 38284315382
+          github-token: ${{ github.token }}
+          path: /tmp/recovery
+      - name: Recuperar backup e mesclar peças aprovadas
+        run: |
+          python3 scripts/update_r2_programming.py --current /tmp/recovery/programming-before.json --additions scripts/jingle-additions.json --output /tmp/recovery/merged.json
+          python3 scripts/update_r2_programming.py --current /tmp/recovery/merged.json --additions scripts/station-id-additions.json --output /tmp/recovery/programming.json
+          python3 - <<'PYTHON'
+          import json, os, subprocess
+          from urllib.parse import unquote, urlsplit
+          p = '/tmp/recovery/programming.json'
+          data = json.load(open(p))
+          data['version'] = max(data['version'], 10)
+          endpoint = 'https://' + os.environ['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
+          for item in data['stationIds'] + data['jingles']:
+              result = subprocess.check_output(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'], '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint])
+              assert json.loads(result)['ContentLength'] > 0
+          with open(p, 'w') as f: json.dump(data, f, ensure_ascii=False, indent=2); f.write('\n')
+          print('Validated:', len(data['stationIds']), 'station IDs;', len(data['jingles']), 'jingles')
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: programming-restoration
+          path: /tmp/recovery/
+          retention-days: 30
+      - name: Criar somente se programming.json continuar ausente
+        run: |
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3api put-object --bucket "$R2_BUCKET" --key programming.json --body /tmp/recovery/programming.json --if-none-match '*' --content-type 'application/json; charset=utf-8' --cache-control 'no-cache, max-age=0' --endpoint-url "$ENDPOINT"
+          aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/published.json --endpoint-url "$ENDPOINT"
+          cmp /tmp/recovery/programming.json /tmp/published.json
