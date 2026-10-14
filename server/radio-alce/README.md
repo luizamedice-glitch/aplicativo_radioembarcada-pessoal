@@ -218,3 +218,23 @@ Somente após aprovação copie a candidata sobre `liquidsoap/radio.liq` e execu
 restaure esse único arquivo do backup e repita o último comando. Credenciais,
 volumes, imagem fixada, planner e emergency não são alterados. O encoder será
 reconectado uma vez; valide a amplitude do stream após a troca.
+
+### Nome do JSON de programação no R2
+
+O endpoint consumido pelo servidor é `programming.json` na raiz do bucket.
+`server/radio-alce/programming.json` registra a configuração completa recuperada
+em 14/10/2026 (versão 10), validada pelo parser do servidor e publicada no R2.
+Ela contém `stationId`, `version`, `rules`, `stationIds` e `jingles`.
+
+`scripts/station-id-additions.json` é somente uma lista de adições para merge.
+Não deve substituir nem ser publicada como configuração completa, mesmo que
+renomeada para `station-id-additions-atualizado.json`. Para futuras adições, use
+o workflow existente de publicação de vinhetas, que preserva a configuração remota.
+O snapshot versionado não é carregado automaticamente pelo servidor.
+
+A operação manual `restore_programming` do workflow de sincronização recupera
+um backup histórico, valida os áudios e cria o objeto somente se estiver ausente
+(`If-None-Match: *`). Referências confirmadas como 404 são descartadas; erros de
+acesso interrompem a publicação. Não usar essa recuperação histórica para uma
+atualização rotineira. O relatório e os JSONs ficam no Artifact
+`programming-restoration` por 30 dias.
