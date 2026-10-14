@@ -321,9 +321,19 @@ jobs:
           data = json.load(open(p))
           data['version'] = max(data['version'], 10)
           endpoint = 'https://' + os.environ['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
-          for item in data['stationIds'] + data['jingles']:
-              result = subprocess.check_output(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'], '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint])
-              assert json.loads(result)['ContentLength'] > 0
+          for pool in ('stationIds', 'jingles'):
+              valid = []
+              for item in data[pool]:
+                  result = subprocess.run(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'], '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint], capture_output=True, text=True)
+                  if result.returncode and '(404)' in result.stderr:
+                      print('Removed obsolete reference (R2 404):', item['id'])
+                      continue
+                  if result.returncode:
+                      raise SystemExit('Unable to validate audio: ' + item['id'])
+                  assert json.loads(result.stdout)['ContentLength'] > 0
+                  valid.append(item)
+              assert valid, 'No valid audio in ' + pool
+              data[pool] = valid
           with open(p, 'w') as f: json.dump(data, f, ensure_ascii=False, indent=2); f.write('\n')
           print('Validated:', len(data['stationIds']), 'station IDs;', len(data['jingles']), 'jingles')
           PYTHON
