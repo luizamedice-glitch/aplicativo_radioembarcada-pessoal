@@ -44,10 +44,24 @@ class EngineFixture(unittest.TestCase):
 
 
 class EngineTests(EngineFixture):
-    def test_pattern_is_exactly_station_station_jingle_forever(self):
+    def test_pattern_is_exactly_station_station_jingle_when_jingle_is_allowed(self):
         p = programming()
-        values = [self.engine.insertion(p, lambda value: value)['type'] for _ in range(12)]
+        values = [self.engine.insertion(p, lambda value: value, allow_jingle=True)['type'] for _ in range(12)]
         self.assertEqual(list(config.INSERTION_PATTERN) * 4, values)
+
+    def test_jingle_slot_is_silent_until_one_hour_has_elapsed(self):
+        p = programming()
+        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
+        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
+        self.assertIsNone(self.engine.insertion(p, lambda value: value, allow_jingle=False))
+        self.now += config.JINGLE_INTERVAL
+        self.assertTrue(self.engine.jingle_due())
+        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
+        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
+        jingle = self.engine.insertion(p, lambda value: value, allow_jingle=True)
+        self.assertEqual('JINGLE', jingle['type'])
+        self.engine.started(jingle, self.engine.checkpoint())
+        self.assertFalse(self.engine.jingle_due())
 
     def test_independent_bags_use_all_eight_and_all_three_without_immediate_repeats(self):
         p = programming()

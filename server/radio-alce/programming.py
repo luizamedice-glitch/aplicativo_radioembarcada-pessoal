@@ -53,13 +53,15 @@ class ProgrammingEngine:
         self.stations = ShuffleBag(self.state.get('stations'), self.rng)
         self.jingles = ShuffleBag(self.state.get('jingles'), self.rng)
         self.version = self.state.get('version')
+        self.last_jingle_at = self.state.get('last_jingle_at', self.clock())
         self.last_music = storage.get('last_music')
         self.failed_until = {}
 
     def snapshot(self):
         return {'position': self.position, 'stations': self.stations.snapshot(),
                 'jingles': self.jingles.snapshot(), 'version': self.version,
-                'last_news_slot': self.state.get('last_news_slot', 0)}
+                'last_news_slot': self.state.get('last_news_slot', 0),
+                'last_jingle_at': self.last_jingle_at}
 
     def update(self, programming):
         if self.version != programming['version']:
@@ -104,9 +106,17 @@ class ProgrammingEngine:
             return self.rng.choice(oldest[:max(1, min(5, (len(oldest) + 3) // 4))])
         return None
 
-    def insertion(self, programming, prepare):
+    def jingle_due(self, boundary=None):
+        when = self.clock() if boundary is None else boundary
+        return when - self.last_jingle_at >= config.JINGLE_INTERVAL
+
+    def insertion(self, programming, prepare, allow_jingle=True):
         self.update(programming)
         kind = config.INSERTION_PATTERN[self.position]
+        if kind == 'JINGLE' and not allow_jingle:
+            self.position = (self.position + 1) % len(config.INSERTION_PATTERN)
+            log.info('INTERSTITIAL JINGLE deferred; 1-hour interval not reached')
+            return None
         pool = self.available(programming['stationIds' if kind == 'STATION_ID' else 'jingles'])
         bag = self.stations if kind == 'STATION_ID' else self.jingles
         for _ in range(len(pool)):
@@ -139,7 +149,12 @@ class ProgrammingEngine:
         self.state['last_news_slot'] = int(boundary // config.NEWS_INTERVAL)
 
     def started(self, item, checkpoint):
-        self.storage.started(item, checkpoint, self.clock(), config.HISTORY_RETENTION,
+        now = self.clock()
+        persisted = copy.deepcopy(checkpoint)
+        if item['type'] == 'JINGLE':
+            self.last_jingle_at = now
+            persisted['last_jingle_at'] = now
+        self.storage.started(item, persisted, now, config.HISTORY_RETENTION,
                              config.HISTORY_LIMIT, config.NEWS_HISTORY_LIMIT)
         if item['type'] == 'MUSIC':
             self.last_music = item['id']

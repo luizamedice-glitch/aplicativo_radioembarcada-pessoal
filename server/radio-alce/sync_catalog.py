@@ -161,7 +161,15 @@ class Planner:
         if self.engine.news_due(boundary):
             inserts = self._news_block(boundary)
         if inserts is None:
-            insertion = self.engine.insertion(self.catalogs.programming, self.cache.prepare)
+            with self.lock:
+                pending_jingle = any(
+                    entry['item']['type'] == 'JINGLE'
+                    for entry in list(self.ready) + list(self.delivered.values())
+                    if not entry.get('started')
+                )
+            allow_jingle = (not pending_jingle) and self.engine.jingle_due(boundary)
+            insertion = self.engine.insertion(
+                self.catalogs.programming, self.cache.prepare, allow_jingle=allow_jingle)
             inserts = [insertion] if insertion else []
         # Publish the fully prepared block atomically; /next cannot observe a lone insert.
         with self.lock:
