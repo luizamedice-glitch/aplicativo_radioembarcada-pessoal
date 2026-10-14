@@ -78,16 +78,19 @@ def program_started(_track_metadata) =
 end
 program.on_track(synchronous=true, program_started)
 
-# Apply per-item gain and explicit metadata-driven fades on the primary program only.
-# MUSIC carries liq_fade_out=15s; short pieces carry 0s fade-out and a tiny fade-in.
-# This exact explicit override path is covered by the runtime amplitude regression test.
-program = amplify(override="liq_gain", 0.9, program)
-program = fade.out(duration=0., override_duration="liq_fade_out",
-  track_sensitive=true, type="sin", program)
-program = fade.in(duration=0., override_duration="liq_fade_in",
-  track_sensitive=true, type="sin", program)
-
+# Keep source selection on the raw prepared program. Fade operators around the primary
+# source can transiently report it unready at track boundaries, which makes fallback
+# jump to the MUSIC-only emergency playlist and effectively hides station IDs/jingles.
 radio = fallback(track_sensitive=true, [program, emergency])
+
+# Process the already-selected global signal instead. Program requests carry metadata:
+# MUSIC => 15s fade-out; station IDs/jingles/news => 0s fade-out and short fade-in.
+# Emergency tracks have no fade override, so they stay continuous during real outages.
+radio = amplify(override="liq_gain", 0.9, radio)
+radio = fade.out(duration=0., override_duration="liq_fade_out",
+  track_sensitive=true, type="sin", radio)
+radio = fade.in(duration=0., override_duration="liq_fade_in",
+  track_sensitive=true, type="sin", radio)
 
 def acknowledge(track_metadata) =
   token = list.assoc(default="", "radio_token", track_metadata)
