@@ -2,6 +2,9 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import hashlib
+import subprocess
+import tempfile
 import json
 import os
 from pathlib import Path
@@ -88,9 +91,21 @@ def main():
             # Never overwrite even a same-name destination; require exact identity.
             check_object(head(r2, move['target']), move)
         else:
-            r2.aws('s3api', 'copy-object', '--bucket', r2.bucket, '--key', move['target'],
-                   '--copy-source', quote(r2.bucket + '/' + move['source'], safe='/'),
-                   '--copy-source-if-match', move['etag'], '--metadata-directive', 'COPY')
+            try:
+                # AWS CLI handles CopySource URL encoding; do not double-encode names.
+                r2.aws('s3api', 'copy-object', '--bucket', r2.bucket, '--key', move['target'],
+                       '--copy-source', r2.bucket + '/' + move['source'],
+                       '--copy-source-if-match', move['etag'], '--metadata-directive', 'COPY')
+            except subprocess.CalledProcessError:
+                # Compatible fallback using the same authenticated R2 read/write operations.
+                # Verify actual bytes before upload; originals remain until final cleanup.
+                with tempfile.TemporaryDirectory(prefix='alce-move-') as tmp:
+                    track = Path(tmp) / 'track.mp3'
+                    r2.download(move['source'], track)
+                    if (track.stat().st_size != move['size']
+                            or hashlib.sha256(track.read_bytes()).hexdigest() != move['sha256']):
+                        raise ValueError('Downloaded audio hash mismatch')
+                    r2.upload(track, move['target'], move['sha256'])
             check_object(head(r2, move['target']), move)
     with ThreadPoolExecutor(max_workers=4) as pool:
         for index, _ in enumerate(pool.map(copy_verified, moves), 1):
