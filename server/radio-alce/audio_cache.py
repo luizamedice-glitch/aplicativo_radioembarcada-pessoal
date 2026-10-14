@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -23,6 +24,34 @@ def probe(path):
     return duration
 
 
+def trailing_silence_cue(path, duration, window=12., threshold_db=-60, minimum=0.35):
+    """Return a safe cue-out at the start of true trailing silence, or None."""
+    if duration <= minimum:
+        return None
+    start = max(0., duration - window)
+    length = max(0.1, duration - start)
+    result = subprocess.run([
+        'ffmpeg', '-hide_banner', '-nostats', '-v', 'info',
+        '-ss', str(start), '-i', str(path), '-t', str(length),
+        '-af', f'silencedetect=noise={threshold_db}dB:d={minimum}',
+        '-f', 'null', '-'
+    ], capture_output=True, text=True, timeout=20)
+    if result.returncode != 0:
+        return None
+    starts = [float(value) for value in re.findall(r'silence_start:\s*([\d.]+)', result.stderr)]
+    ends = [float(value) for value in re.findall(r'silence_end:\s*([\d.]+)', result.stderr)]
+    if not starts or not ends:
+        return None
+    silence_start, silence_end = starts[-1], ends[-1]
+    # Input seeking makes silencedetect timestamps local to this short tail window.
+    if abs(silence_end - length) > 0.20:
+        return None
+    cue = start + silence_start
+    if duration - cue < minimum or cue < 5.:
+        return None
+    return round(cue, 3)
+
+
 class AudioCache:
     def __init__(self, directory, limit=config.CACHE_BYTES, download=None):
         self.directory = Path(directory)
@@ -32,6 +61,7 @@ class AudioCache:
         self.download = download or self._download
         self.lock = threading.RLock()
         self.pinned = set()
+        self.analysis = {}
 
     def pin(self, urls):
         self.pinned = {str(self.directory / (hashlib.sha256(url.encode()).hexdigest() + '.mp3'))
@@ -80,7 +110,17 @@ class AudioCache:
                     duration = probe(path)
                 path.chmod(0o644)
                 path.touch()
-                return dict(item, path=str(path), duration=duration)
+                key = (str(path), path.stat().st_size, path.stat().st_mtime_ns)
+                if key not in self.analysis:
+                    self.analysis.clear()
+                    self.analysis[key] = trailing_silence_cue(path, duration) if item.get('type') == 'MUSIC' else None
+                cue_out = self.analysis[key]
+                result = dict(item, path=str(path), duration=duration)
+                if cue_out is not None:
+                    result['media_duration'] = duration
+                    result['cue_out'] = cue_out
+                    result['duration'] = cue_out
+                return result
             finally:
                 tmp.unlink(missing_ok=True)
 

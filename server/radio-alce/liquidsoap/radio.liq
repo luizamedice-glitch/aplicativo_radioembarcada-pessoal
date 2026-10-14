@@ -78,8 +78,15 @@ def program_started(_track_metadata) =
 end
 program.on_track(synchronous=true, program_started)
 
-# Restore the primary PCM path without metadata-dependent gain/fade processing.
-# Fades must pass real output-amplitude regression tests before being re-enabled.
+# Apply per-item gain and explicit metadata-driven fades on the primary program only.
+# MUSIC carries liq_fade_out=15s; short pieces carry 0s fade-out and a tiny fade-in.
+# This exact explicit override path is covered by the runtime amplitude regression test.
+program = amplify(override="liq_gain", 0.9, program)
+program = fade.out(duration=0., override_duration="liq_fade_out",
+  track_sensitive=true, type="sin", program)
+program = fade.in(duration=0., override_duration="liq_fade_in",
+  track_sensitive=true, type="sin", program)
+
 radio = fallback(track_sensitive=true, [program, emergency])
 
 def acknowledge(track_metadata) =
