@@ -484,7 +484,7 @@ para `Spot_Bifao-Certo.mp3`; a URL nova também renova a chave do cache de áudi
 
 No workflow existente **Sincronizar catálogo R2**, `operation=import_zip` processa
 os arquivos `.zip` em `uploads_zip/`, inclusive subpastas. Valida MP3 com FFprobe e
-decodificação FFmpeg, envia para `music/zip-imports/<SHA256>/<nome>.mp3` e só então
+decodificação FFmpeg, envia para `music/zip-imports/<nome>.mp3` (SHA256 em metadata; sufixo em colisões) e só então
 regenera `music_catalog.json`. ZIPs originais, APK e programação institucional são
 preservados. Não é necessário reiniciar a rádio.
 
@@ -505,3 +505,20 @@ A importação também aceita a pasta `uploads-zip/` (com hífen) e MP3s já
 extraídos em subpastas de qualquer um dos dois prefixos. Usa a mesma validação e
 deduplicação por conteúdo. Arquivos de origem são preservados; ZIPs fora desses
 prefixos, como a biblioteca de Hora Certa, não são importados como música.
+
+### Curadoria: MP3s diretamente em music/zip-imports/
+
+`operation=flatten_music` no workflow de sincronização organiza os MP3s importados
+em `music/zip-imports/<nome>.mp3`, sem subpastas de hash. Nomes iguais com conteúdo
+diferente recebem sufixo de identificação. Novas importações também usam esse
+formato; a deduplicação continua usando SHA256 nos metadados dos objetos.
+
+A operação guarda catálogo anterior/novo e mapa de caminhos no Artifact
+`music-flatten-backup` (30 dias), copia e verifica tamanho/SHA256 antes de publicar
+novas URLs. IDs, títulos, artistas e histórico musical são preservados, inclusive
+em futuras sincronizações do catálogo. Após 75 segundos para atualização do
+servidor, verifica novamente as cópias e remove apenas os caminhos antigos.
+Nenhum arquivo de `uploads-zip/` é removido. Para rollback, o mapa permite copiar
+os destinos de volta às origens e republicar o catálogo anterior com versão maior.
+Após excluir faixas na curadoria, execute `operation=music` para atualizar o JSON;
+não reexecute `import_zip` sobre fontes antigas, pois elas podem ser importadas novamente.

@@ -54,13 +54,17 @@ def main():
         if isinstance(item, dict) and item.get("id")
     }
 
+    previous_by_url = {item.get("url"): item for item in old_items
+                       if isinstance(item, dict) and item.get("id") and item.get("url")}
     base = args.public_base.rstrip("/")
     items = []
 
     for key in keys:
         track_id = hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
         filename = PurePosixPath(key).name
-        previous = previous_by_id.get(track_id, {})
+        url = f"{base}/{quote(key, safe='/')}"
+        previous = previous_by_url.get(url) or previous_by_id.get(track_id, {})
+        track_id = previous.get("id") or track_id
 
         item = {
             "id": track_id,

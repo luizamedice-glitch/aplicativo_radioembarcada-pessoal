@@ -7,7 +7,7 @@ on:
         description: Catálogo musical, peças aprovadas ou inventário
         type: choice
         default: music
-        options: [music, programming, jingles, inventory, import_zip]
+        options: [music, programming, jingles, inventory, import_zip, flatten_music]
 
 concurrency:
   group: r2-library-publication
@@ -264,3 +264,28 @@ jobs:
           path: /tmp/r2-inventory.json
           retention-days: 1
           if-no-files-found: error
+
+  flatten_music:
+    name: Organizar MP3 sem subpastas
+    if: inputs.operation == 'flatten_music'
+    needs: r2_access
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testar migração
+        run: python3 -m unittest discover -s scripts -p 'test_flatten_r2_music.py' -v
+      - name: Preparar plano e backup
+        run: python3 -u scripts/flatten_r2_music.py --stage plan --directory /tmp/flatten-music
+      - uses: actions/upload-artifact@v4
+        with:
+          name: music-flatten-backup
+          path: /tmp/flatten-music/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Copiar, verificar, atualizar catálogo e remover caminhos antigos
+        run: python3 -u scripts/flatten_r2_music.py --stage apply --directory /tmp/flatten-music

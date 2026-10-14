@@ -11,11 +11,11 @@ import tempfile
 import zipfile
 
 from prepare_test_music import safe_path
+from r2_music_paths import IMPORT_PREFIX, flat_key, content_digest
 
 MAX_ZIP_BYTES = 8 * 1024 ** 3
 MAX_TRACK_BYTES = 150 * 1024 ** 2  # Same limit as the station's audio cache.
 MAX_EXPANDED_BYTES = 20 * 1024 ** 3
-IMPORT_PREFIX = 'music/zip-imports/'
 
 
 def inspect_audio(path):
@@ -42,7 +42,7 @@ def import_track(target, name, known, upload, probe=inspect_audio):
         probe(target)
     except (ValueError, KeyError, subprocess.SubprocessError) as error:
         return 'ignored', {'file': name, 'reason': 'invalid audio: ' + type(error).__name__}
-    key = IMPORT_PREFIX + sha + '/' + PurePosixPath(name.replace('\\', '/')).name
+    key = flat_key(name, sha, {key: digest for digest, key in known.items()})
     upload(target, key, sha)
     known[sha] = key
     return 'uploaded', {'file': name, 'key': key, 'bytes': target.stat().st_size}
@@ -128,9 +128,14 @@ def main():
         raise ValueError('No ZIPs or MP3s found in uploads_zip/ or uploads-zip/')
     known = {}
     for item in r2.listing(IMPORT_PREFIX):
-        parts = item['Key'][len(IMPORT_PREFIX):].split('/')
-        if len(parts) == 2 and len(parts[0]) == 64 and item['Size'] > 0:
-            known[parts[0]] = item['Key']
+        if item['Size'] <= 0 or not item['Key'].lower().endswith('.mp3'):
+            continue
+        digest = content_digest(item)
+        if not digest:
+            head = json.loads(r2.aws('s3api', 'head-object', '--bucket', r2.bucket, '--key', item['Key']))
+            digest = content_digest(item, head)
+        # Reserve unrelated flat keys too; never overwrite an unknown object.
+        known[digest or ('unknown:' + item['Key'])] = item['Key']
     reports = []
     try:
         for index, obj in enumerate(tracks, 1):
