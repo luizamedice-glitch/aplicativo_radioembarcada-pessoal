@@ -44,6 +44,58 @@ class EngineFixture(unittest.TestCase):
 
 
 class EngineTests(EngineFixture):
+    def test_news_interval_is_four_hours_not_half_hour(self):
+        self.assertEqual(14400, config.NEWS_INTERVAL)
+        for elapsed in (1800, 3600, 7200, 14399):
+            self.assertFalse(self.engine.news_due(self.now + elapsed))
+        self.assertTrue(self.engine.news_due(self.now + 14400))
+
+    def test_news_legacy_half_hour_checkpoint_migrates_without_resetting_cycle(self):
+        legacy_boundary = int(self.now // 1800) * 1800
+        self.store.put('programming', {'last_news_slot': int(self.now // 1800), 'position': 2})
+        restarted = ProgrammingEngine(self.store, lambda: self.now)
+        self.assertEqual(2, restarted.position)
+        self.assertFalse(restarted.news_due(legacy_boundary + 14399))
+        self.assertTrue(restarted.news_due(legacy_boundary + 14400))
+        self.assertEqual(legacy_boundary, self.store.get('programming')['last_news_boundary'])
+
+    def test_news_actual_playback_overrides_older_planned_boundary(self):
+        self.engine.reserve_news(self.now)
+        self.now += 120
+        self.engine.started(item('news', 'NEWS_DROP'), self.engine.checkpoint())
+        for engine in (self.engine, ProgrammingEngine(self.store, lambda: self.now)):
+            self.assertFalse(engine.news_due(self.now + 14399))
+            self.assertTrue(engine.news_due(self.now + 14400))
+
+    def test_news_reservation_survives_restart_without_consuming_cycle(self):
+        boundary = self.now + config.NEWS_INTERVAL
+        self.engine.position = 1
+        self.engine.reserve_news(boundary)
+        self.engine.started(item('intro', 'NEWS_INTRO'), self.engine.checkpoint())
+        self.store.close()
+        self.store = Storage(self.path)
+        restarted = ProgrammingEngine(self.store, lambda: boundary + 30)
+        self.assertEqual(1, restarted.position)
+        self.assertFalse(restarted.news_due(boundary + 1800))
+        self.assertTrue(restarted.news_due(boundary + 14400))
+
+    def test_news_initial_anchor_survives_restart_without_any_playback(self):
+        started_at = self.now
+        self.now += 7200
+        restarted = ProgrammingEngine(self.store, lambda: self.now)
+        self.assertFalse(restarted.news_due(started_at + 14399))
+        self.assertTrue(restarted.news_due(started_at + 14400))
+
+    def test_news_timestamp_supports_future_interval_change_and_legacy_rollback(self):
+        self.engine.reserve_news(self.now)
+        checkpoint = self.engine.checkpoint()
+        self.assertEqual(int(self.now // 1800), checkpoint['last_news_slot'])
+        self.store.put('programming', checkpoint)
+        with patch.object(config, 'NEWS_INTERVAL', 5 * 3600):
+            restarted = ProgrammingEngine(self.store, lambda: self.now)
+            self.assertFalse(restarted.news_due(self.now + 14400))
+            self.assertTrue(restarted.news_due(self.now + 18000))
+
     def test_pattern_is_exactly_station_station_jingle_when_jingle_is_allowed(self):
         p = programming()
         values = [self.engine.insertion(p, lambda value: value, allow_jingle=True)['type'] for _ in range(12)]
@@ -236,8 +288,8 @@ class PlannerTests(EngineFixture):
 
     def test_news_clock_and_safe_boundary(self):
         self.assertFalse(self.engine.news_due(self.now))
-        self.assertFalse(self.engine.news_due(self.now + 1700))
-        self.assertTrue(self.engine.news_due(self.now + 1800))
+        self.assertFalse(self.engine.news_due(self.now + config.NEWS_INTERVAL - 1))
+        self.assertTrue(self.engine.news_due(self.now + config.NEWS_INTERVAL))
         self.assertFalse(self.store.played_news())
 
 

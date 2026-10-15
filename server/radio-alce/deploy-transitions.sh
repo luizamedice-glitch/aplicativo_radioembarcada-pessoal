@@ -53,7 +53,7 @@ docker compose up -d --no-deps --force-recreate --wait --wait-timeout 120 liquid
 LOCAL_LIQ=$(sha256sum liquidsoap/radio.liq | cut -d' ' -f1)
 ACTIVE_LIQ=$(docker exec radio-alce-liquidsoap sha256sum /radio.liq | cut -d' ' -f1)
 test "$LOCAL_LIQ" = "$ACTIVE_LIQ"
-for FILE in audio_boundaries.py audio_cache.py sync_catalog.py config.py; do
+for FILE in audio_boundaries.py audio_cache.py sync_catalog.py config.py programming.py; do
   LOCAL_SUM=$(sha256sum "$FILE" | cut -d' ' -f1)
   ACTIVE_SUM=$(docker exec radio-alce-catalog sha256sum "/app/$FILE" | cut -d' ' -f1)
   test "$LOCAL_SUM" = "$ACTIVE_SUM"

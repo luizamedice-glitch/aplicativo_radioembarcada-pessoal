@@ -58,7 +58,7 @@ times = SimpleNamespace(ready=lambda *args: None)
 catalogs = SimpleNamespace(music={'items':items['music']}, programming=items['programming'])
 planner = Planner(catalogs, ProgrammingEngine(Storage('/data/station.sqlite3')), Cache(), news, times)
 if os.getenv('ALCE_TEST_NEWS')=='1':
- planner.engine.state['last_news_slot']=int(time.time()//1800)-1
+ planner.engine.state['last_news_boundary']=time.time()-config.NEWS_INTERVAL
  planner.engine.storage.put('programming',planner.engine.checkpoint())
 def fill():
  while True:

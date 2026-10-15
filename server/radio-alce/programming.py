@@ -8,6 +8,9 @@ import config
 
 log = logging.getLogger('radio')
 
+# Compatibility only: old checkpoints encoded epoch time in half-hour slots.
+LEGACY_NEWS_SLOT_SECONDS = 30 * 60
+
 
 class ShuffleBag:
     def __init__(self, state=None, rng=None):
@@ -48,7 +51,17 @@ class ProgrammingEngine:
         self.storage, self.clock = storage, clock
         self.rng = rng or random.SystemRandom()
         self.state = storage.get('programming', {})
-        self.state.setdefault('last_news_slot', int(self.clock() // config.NEWS_INTERVAL))
+        if 'last_news_boundary' not in self.state:
+            legacy = self.state.get('last_news_slot')
+            self.state['last_news_boundary'] = (
+                legacy * LEGACY_NEWS_SLOT_SECONDS if legacy is not None else self.clock())
+        # Actual playback may be later than its planned boundary (decoder/network delay).
+        self.state['last_news_boundary'] = max(
+            self.state['last_news_boundary'], storage.get('last_news_played_at', 0))
+        storage.put('programming', self.state)
+        log.info('NEWS schedule interval=%ss; last boundary=%.0f; next eligible=%.0f',
+                 config.NEWS_INTERVAL, self.state['last_news_boundary'],
+                 self.state['last_news_boundary'] + config.NEWS_INTERVAL)
         self.position = self.state.get('position', 0) % len(config.INSERTION_PATTERN)
         self.stations = ShuffleBag(self.state.get('stations'), self.rng)
         self.jingles = ShuffleBag(self.state.get('jingles'), self.rng)
@@ -60,7 +73,9 @@ class ProgrammingEngine:
     def snapshot(self):
         return {'position': self.position, 'stations': self.stations.snapshot(),
                 'jingles': self.jingles.snapshot(), 'version': self.version,
-                'last_news_slot': self.state.get('last_news_slot', 0),
+                'last_news_boundary': self.state['last_news_boundary'],
+                # Keep old binaries able to read the state during rollback.
+                'last_news_slot': int(self.state['last_news_boundary'] // LEGACY_NEWS_SLOT_SECONDS),
                 'last_jingle_at': self.last_jingle_at}
 
     def update(self, programming):
@@ -137,16 +152,12 @@ class ProgrammingEngine:
         return None
 
     def news_due(self, boundary):
-        slot = int(boundary // config.NEWS_INTERVAL)
-        # No immediate news on first boot; restore the previous successful boundary after reboot.
-        last = self.state.get('last_news_slot')
-        if last is None:
-            self.state['last_news_slot'] = int(self.clock() // config.NEWS_INTERVAL)
-            last = self.state['last_news_slot']
-        return slot > last
+        last = max(self.state['last_news_boundary'],
+                   self.storage.get('last_news_played_at', 0))
+        return boundary - last >= config.NEWS_INTERVAL
 
     def reserve_news(self, boundary):
-        self.state['last_news_slot'] = int(boundary // config.NEWS_INTERVAL)
+        self.state['last_news_boundary'] = boundary
 
     def started(self, item, checkpoint):
         now = self.clock()

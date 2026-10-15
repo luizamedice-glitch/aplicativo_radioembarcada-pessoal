@@ -44,11 +44,15 @@ Falha de música: cooldown 10 min e outra seleção; peça institucional: tenta 
 
 Feed oficial preservado: `https://agenciabrasil.ebc.com.br/radioagencia-nacional/rss/ultimasnoticias/feed.xml`. `RemoteNewsProvider` atualiza a cada 15 min; prefere a notícia não reproduzida mais recente nas últimas 24 h, duração 30–240 s. Usa enclosure ou resolve áudio do HTML oficial; URLs e redirects ficam restritos a HTTPS EBC. Notícias não são modificadas, e metadata atribui **Radioagência Nacional**.
 
-Blocos ficam devidos nos slots de **30 min**, mas só entram após a música terminar, substituindo a inserção normal sem consumir sua posição. Não interrompem conteúdos. A previsão considera a duração dos itens já preparados, corrigida pelo começo real de playback. Sequência indivisível:
+Blocos ficam devidos após **4 horas** desde a última notícia (ou início da estação, quando não há histórico), mas só entram após a música terminar, substituindo a inserção normal sem consumir sua posição. Não interrompem conteúdos. A previsão considera a duração dos itens já preparados, corrigida pelo começo real de playback. Sequência indivisível:
 
 **MUSIC → NEWS_INTRO → [TIME_ANNOUNCEMENT] → NEWS_DROP → MUSIC**.
 
 Intro: `Vinheta_Noticias_Masterizada.mp3` no mesmo R2. Não há vinheta/jingle comum no bloco. Quando não há notícia elegível, continua a programação e tenta no próximo ponto seguro.
+
+O checkpoint salva timestamps absolutos, migra os slots antigos de 30 min sem apagar histórico e sobrevive a reinícios. `config.NEWS_INTERVAL = 4 * 60 * 60` é a configuração do servidor; `programming.json` não controla esse intervalo. O refresh do RSS continua a cada 15 min e não dispara blocos.
+
+A hora continua opcional **dentro do bloco de notícias**; não foi criado um anúncio independente a cada meia hora.
 
 Hora: timezone **America/Sao_Paulo**, slots HH:00/HH:30. Conforme regra aprovada, **se o ponto seguro atrasar mais de 60 s, omite somente a hora**. Não corta música para acertar relógio. O Liquidsoap revalida o deadline no início real, além da previsão do planner, e descarta uma hora vencida por atraso de decoder/rede. A notícia continua. A latência do stream/player acrescenta alguns segundos.
 
@@ -129,7 +133,7 @@ ALCE_TEST_NEWS=1 python3 server/radio-alce/tests/validate_runtime.py
 
 O workflow **existente** `Android debug` executa testes Python e valida sintaxe Liquidsoap, além de testes Android/lint/build. Artifact APK continua `radio-embarcada-debug-apk`; não contém música, chave TTS ou alteração de player nesta tarefa.
 
-Após deploy, ouvir `http://15.229.83.121:8000/alce.mp3` em dois aparelhos simultaneamente: música/vinheta/música/vinheta/música/jingle/música, peças completas, cortes limpos, mesma sequência e diferença pequena de buffer. Ouvir também um bloco de 30 min; se terminou fora da tolerância, **não haverá hora**. Testar restart completo com `docker compose restart` e conferir histórico/ciclo persistentes. Para substituir apenas o serviço catalog em manutenção, reiniciar também liquidsoap para descartar reservas de decoder da sessão anterior.
+Após deploy, ouvir `http://15.229.83.121:8000/alce.mp3` em dois aparelhos simultaneamente: música/vinheta/música/vinheta/música/jingle/música, peças completas, cortes limpos, mesma sequência e diferença pequena de buffer. Ouvir também um bloco de notícias após 4 horas; se terminou fora da tolerância, **não haverá hora**. Testar restart completo com `docker compose restart` e conferir histórico/ciclo persistentes. Para substituir apenas o serviço catalog em manutenção, reiniciar também liquidsoap para descartar reservas de decoder da sessão anterior.
 
 O Codex não possui SSH/SSM da EC2; validações isoladas não comprovam que a nova versão já foi aplicada na produção. Não foi feito cutover remoto.
 
