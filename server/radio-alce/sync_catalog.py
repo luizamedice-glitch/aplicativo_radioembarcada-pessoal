@@ -30,8 +30,13 @@ def request_uri(item, token):
     metadata = {'radio_token': token, 'radio_id': item['id'], 'program_type': item['type'],
                 'title': item['title'], 'artist': item.get('artist', ''),
                 'liq_gain': config.GAINS.get(item['type'], .8),
-                'liq_fade_out': config.MUSIC_FADE_SECONDS if item['type'] == 'MUSIC' else 0.,
+                'radio_duration': item.get('duration', 0.),
+                'radio_fade_floor': config.MUSIC_FADE_FLOOR,
+                'liq_fade_out': min(config.MUSIC_FADE_SECONDS, item.get('duration', 30.) / 2) if item['type'] == 'MUSIC' else 0.,
                 'liq_fade_in': .1 if item['type'] == 'MUSIC' else .15}
+    if 'cue_in' in item:
+        metadata['liq_cue_in'] = item['cue_in']
+        metadata['liq_cue_out'] = item['cue_out']
     if item['type'] == 'TIME_ANNOUNCEMENT':
         metadata['time_valid_until'] = item['slot'] + config.TIME_MAX_LATENESS
     return 'annotate:' + ','.join(f'{key}="{quote(value)}"' for key, value in metadata.items()) + ':' + item['path']

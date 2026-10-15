@@ -78,8 +78,46 @@ def program_started(_track_metadata) =
 end
 program.on_track(synchronous=true, program_started)
 
-# Restore the primary PCM path without metadata-dependent gain/fade processing.
-# Fades must pass real output-amplitude regression tests before being re-enabled.
+# BEGIN AUDIO TRANSITIONS
+log("AUDIO pipeline=clock-envelope-v1; measured cues; no overlap")
+# The planner measured decoded duration/cue points before enqueueing this request.
+# Use that duration and the source clock, not an estimated remaining-time trigger.
+# Only volume changes: no skip, sleep, network I/O, overlap or track replacement.
+track_started_at = ref(0.)
+track_duration = ref(0.)
+track_gain = ref(0.9)
+track_fade_out = ref(0.)
+track_fade_in = ref(0.)
+track_fade_floor = ref(0.03)
+
+def start_envelope(m) =
+  track_started_at.set(program.time())
+  track_duration.set(max(0., float_of_string(default=0., m["radio_duration"])))
+  track_gain.set(max(0., min(1., float_of_string(default=0.9, m["liq_gain"]))))
+  # Defensive type check: an insert can NEVER inherit a MUSIC fade-out.
+  track_fade_out.set(
+    if m["program_type"] == "MUSIC" then
+      max(0., min(track_duration() / 2., float_of_string(default=15., m["liq_fade_out"])))
+    else 0. end)
+  track_fade_in.set(max(0., min(0.3, float_of_string(default=0., m["liq_fade_in"]))))
+  track_fade_floor.set(max(0.01, min(1., float_of_string(default=0.03, m["radio_fade_floor"]))))
+  kind = m["program_type"]
+  log("AUDIO envelope type=#{kind} duration=#{track_duration()}s fade_out=#{track_fade_out()}s gain=#{track_gain()}")
+end
+program.on_track(synchronous=true, start_envelope)
+
+def envelope_gain() =
+  elapsed = max(0., program.time() - track_started_at())
+  remaining = max(0., track_duration() - elapsed)
+  entrance = if track_fade_in() > 0. then min(1., elapsed / track_fade_in()) else 1. end
+  exit_gain =
+    if track_fade_out() > 0. and remaining < track_fade_out() then
+      track_fade_floor() + (1. - track_fade_floor()) * sin(1.5707963267948966 * remaining / track_fade_out())
+    else 1. end
+  track_gain() * entrance * exit_gain
+end
+program = amplify(override=null, envelope_gain, program)
+# END AUDIO TRANSITIONS
 radio = fallback(track_sensitive=true, [program, emergency])
 
 def acknowledge(track_metadata) =

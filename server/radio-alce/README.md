@@ -16,11 +16,27 @@ O planner prepara a próxima música antes de publicar uma inserção. URLs são
 
 Cache operacional LRU inicial **512 MiB**, limite por arquivo 150 MiB. Arquivos em reprodução, reservados e pequeno pool de emergência não são removidos; institucionais do catálogo atual/intro de notícias são protegidos. Portanto o limite pode ser temporariamente excedido por itens protegidos. Os 48 anúncios ficam separadamente em `/data/time/`. Não baixa a biblioteca inteira nem oferece download ao usuário.
 
-**Modo temporário de recuperação de áudio:** o ramo principal não aplica `amplify`,
-`fade.in`, `fade.out`, crossfade ou normalização. Requests/metadados e decisões do
-planner são preservados, mas os envelopes não são executados. Transições são
-cortes limpos entre peças completas. O emergency existente permanece inalterado.
-A prioridade é PCM audível no Icecast; não reintroduzir fades sem teste de amplitude.
+**Transições atuais:** um getter de ganho no `amplify` calcula a envoltória pelo
+relógio da fonte e pela duração PCM medida no cache. Cada callback síncrono de
+início de faixa reinicia o estado; não depende do disparo estimado de `fade.out`. Só MUSIC recebe saída de 15 s (limitada à
+metade da duração para arquivos muito curtos); peças curtas recebem saída zero.
+Não há overlap/crossfade nem encurtamento fixo de vinhetas. Ganhos continuam em
+`config.GAINS`. O emergency existente permanece inalterado.
+
+`audio_boundaries.py` mede PCM antes de publicar o request: só remove da timeline
+silêncio de borda abaixo de −80 dB, contínuo por pelo menos 250 ms, limitado a
+5 s e mantendo margem de 10 ms. Ajusta apenas final de MUSIC e início de
+STATION_ID/JINGLE. Fala, pausas internas, final das peças e início da próxima
+música permanecem intactos. Os MP3 originais não são regravados; o cache salva
+análise versionada `.edges.json` e envia `liq_cue_in/out` ao decoder. A duração
+usada no agendamento corresponde ao áudio após os cues. Notícias/hora não são
+recortadas. Não se promete eliminar pausas artísticas ou áudio baixo audível.
+
+A regressão `ALCE_TEST_TRANSITIONS=1 python3 tests/validate_runtime.py` mede PCM
+recebido do Icecast com fixtures que contêm 2 s de silêncio musical terminal e
+400 ms de silêncio inicial na vinheta: exige saída musical gradual, peças
+completas, restauração do volume e ausência de silêncio >50 ms a −80 dB.
+
 
 Falha de música: cooldown 10 min e outra seleção; peça institucional: tenta alternativas do mesmo tipo, depois segue música. Falha editorial: cancela o bloco inteiro, sem intro isolada. Um pool persistente de três músicas verificadas sustenta o sinal caso o planner falhe. Esse modo de emergência pode relaxar a antirrepetição. Se nunca houve áudio válido no primeiro boot e todas as fontes estão indisponíveis, `mksafe` mantém a conexão Icecast com silêncio; isso é degradado, não uma programação saudável. Não é possível garantir áudio sem uma fonte válida.
 
@@ -125,7 +141,7 @@ validados, e um snapshot antigo é migrado ao iniciar mesmo sem acesso ao R2.
 Não há `annotate:`, URLs ou tokens nesse arquivo. O Liquidsoap usa explicitamente
 o parser M3U (`audio/x-mpegurl`) e antecipa dois arquivos do fallback.
 
-O ganho/fade editorial do ramo principal está temporariamente desativado.
+O ganho/fade editorial foi reativado com relógio da fonte e reinicialização por faixa; consulte a seção de transições atuais.
 O emergency usa ganho fixo moderado (0,9), sem envoltória editorial nem dependência
 de metadados/duração. `metadata.map` fornece metadados genéricos até quando o MP3
 não possui tags e limpa explicitamente tokens/ids. Assim, o fallback não herda
@@ -163,9 +179,9 @@ Rode `./setup.sh --check` antes de `./setup.sh --deploy`. O rollback continua se
 `docker compose up -d --build --remove-orphans` no diretório de backup com o mesmo
 nome de projeto; nunca remova o volume com `down -v`.
 
-## Isolamento de amplitude — Liquidsoap 2.4.6
+## Histórico do isolamento de amplitude — Liquidsoap 2.4.6
 
-Pipeline principal atual: `request.dynamic → fallback → mksafe → output.icecast`
+Pipeline da recuperação anterior: `request.dynamic → fallback → mksafe → output.icecast`
 (MP3 128 kbps, mesmo `/alce.mp3`). Callbacks, planner, emergency, histórico e
 programação continuam intactos. Os campos `liq_gain`/`liq_fade_out`/`liq_fade_in`
 continuam chegando, mas o principal não os aplica nesta recuperação.
@@ -238,3 +254,61 @@ um backup histórico, valida os áudios e cria o objeto somente se estiver ausen
 acesso interrompem a publicação. Não usar essa recuperação histórica para uma
 atualização rotineira. O relatório e os JSONs ficam no Artifact
 `programming-restoration` por 30 dias.
+
+## Deploy da correção MUSIC → INSERT (2026-10-15)
+
+Atualize **catalog e liquidsoap** juntos. O `catalog` mede as bordas e fornece
+`radio_duration`/cues; o encoder aplica o ganho usando o relógio da fonte.
+Não basta copiar apenas `radio.liq`, nem atualizar somente o JSON.
+
+No EC2 Instance Connect, usuário `ubuntu`, use um novo clone do repositório pessoal:
+
+```bash
+RELEASE="$HOME/radio-alce-transitions-$(date -u +%Y%m%dT%H%M%SZ)"
+git clone --branch main --single-branch https://github.com/luizamedice-glitch/aplicativo_radioembarcada-pessoal.git "$RELEASE"
+cd "$RELEASE/server/radio-alce"
+bash deploy-transitions.sh
+```
+
+O script identifica automaticamente instalação/projeto ativos; guarda backup
+privado incluindo `.env`; reutiliza o mesmo volume e as credenciais existentes;
+compila, testa e valida sintaxe antes de trocar containers. Não altera Icecast,
+R2, APK, programação, hora ou notícias. Pode ocorrer uma reconexão breve na troca
+do encoder. No final compara SHA256 dos arquivos dentro dos containers com os
+do checkout e imprime o comando exato de rollback. Não apaga o volume.
+
+Confirmação na EC2: logs `AUDIO pipeline=clock-envelope-v1`, `AUDIO edges` com
+silêncios medidos, `AUDIO envelope type=MUSIC ... fade_out=15.0s` (músicas >30 s)
+e `type=STATION_ID/JINGLE ... fade_out=0.0s`. Duração zero significa que o planner
+antigo ainda está entregando requests sem duração, não que o fade está validado.
+A confirmação final é auditiva em várias trocas e pela medição do stream; logs
+sozinhos não comprovam áudio contínuo. Arquivos com pausas/caudas acima de −80 dB
+não são cortados automaticamente. O teste sintético mede também jingles e dois
+ouvintes recebendo os mesmos bytes de um único encoder.
+
+### Evidência de validação da transição
+
+Teste local isolado com a imagem Liquidsoap 2.4.6 fixada no Compose, mesmo
+`radio.liq` de produção e MP3 recebido de `/alce.mp3` (2026-10-15):
+
+- 3 transições PCM verificadas: duas STATION_ID e um JINGLE, todos completos.
+- Queda medida entre 16 s e 1 s antes das peças: 17,87 / 18,03 / 17,83 dB.
+- Maior janela abaixo de −80 dB: 50 ms (resolução de medição 10 ms), contra
+  2 s de cauda musical + 400 ms de início vazio adicionados às fixtures.
+- Volume do stream: média −21,1 dB / pico −16,7 dB; ganho da MUSIC seguinte restaurado.
+- Dois ouvintes receberam o mesmo sinal codificado; nenhuma fila por cliente.
+- Emergency com planner suspenso: zero janelas silenciosas de 100 ms,
+  retomada da programação confirmada, nenhum erro de parsing M3U.
+- 53 testes do servidor, inclusive dentro da imagem catalog, e 34 testes dos
+  scripts aprovados; imagem catalog compilada e Liquidsoap `--check` aprovado.
+
+A/B também reproduziu o defeito histórico de `fade.out` sem reset: −91 dB.
+O envelope atual permanece audível após várias faixas. O teste de amplitude
+isolado dos operadores não mede sozinho a progressão do fade; a nova regressão
+PCM faz essa distinção. Timestamps HTTP de `/played` são apenas diagnósticos e
+não são tratados como prova de ausência de gaps ou duração integral.
+
+Estas são medições locais, não uma declaração de deploy/escuta na EC2. A validação
+final deve ouvir várias trocas do catálogo real após conferir os hashes dos
+containers implantados. MP3 com silêncio artístico acima do limite conservador
+não são recortados por esta política.

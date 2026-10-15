@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 import config
 from catalogs import valid_url
+from audio_boundaries import prepared_boundaries
 
 
 def probe(path):
@@ -67,6 +68,7 @@ class AudioCache:
                         probe(path)
                     except Exception:
                         path.unlink(missing_ok=True)
+                        path.with_suffix('.edges.json').unlink(missing_ok=True)
                 if not path.exists():
                     self.download(item['url'], tmp)
                     duration = probe(tmp)
@@ -80,7 +82,9 @@ class AudioCache:
                     duration = probe(path)
                 path.chmod(0o644)
                 path.touch()
-                return dict(item, path=str(path), duration=duration)
+                prepared = dict(item, path=str(path), duration=duration)
+                prepared.update(prepared_boundaries(path, item['type']))
+                return prepared
             finally:
                 tmp.unlink(missing_ok=True)
 
@@ -95,5 +99,6 @@ class AudioCache:
                 if str(path) not in protected:
                     size = path.stat().st_size
                     path.unlink(missing_ok=True)
+                    path.with_suffix('.edges.json').unlink(missing_ok=True)
                     total -= size
             return total

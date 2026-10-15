@@ -26,6 +26,7 @@ CACHE_BYTES = int(os.getenv('RADIO_CACHE_BYTES', str(512 * 1024 ** 2)))
 MAX_AUDIO_BYTES = 150 * 1024 ** 2
 PREPARED_ITEMS = 6
 MUSIC_FADE_SECONDS = 15.
+MUSIC_FADE_FLOOR = .03  # Never latch the music at zero before its boundary.
 GAINS = {'MUSIC': .9, 'STATION_ID': .8, 'JINGLE': .8, 'NEWS_INTRO': .8,
          'NEWS_DROP': .9, 'TIME_ANNOUNCEMENT': .8}
 TIME_ZONE = 'America/Sao_Paulo'

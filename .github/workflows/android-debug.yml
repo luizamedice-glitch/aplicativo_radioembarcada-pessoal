@@ -59,6 +59,7 @@ jobs:
         run: |
           docker build -t alce-catalog-validation -f server/radio-alce/Dockerfile.catalog server/radio-alce
           python3 server/radio-alce/tests/validate_audio_pipeline.py
+          ALCE_TEST_TRANSITIONS=1 python3 server/radio-alce/tests/validate_runtime.py
           ALCE_TEST_EMERGENCY=1 python3 server/radio-alce/tests/validate_runtime.py
       - name: Unit tests
         # Run resource-dependent variants separately; both suites remain required.

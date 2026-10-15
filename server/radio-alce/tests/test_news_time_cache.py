@@ -138,9 +138,10 @@ class TimeTests(unittest.TestCase):
             self.assertEqual(b'fixture-audio', target.read_bytes())
 
 class CacheTests(unittest.TestCase):
+    @patch('audio_cache.prepared_boundaries', return_value={})
     @patch('audio_cache.probe', return_value=5)
     @patch('audio_cache.subprocess.run')
-    def test_verified_cache_reused_and_lru_protects_pending_and_pinned(self, decode, probe):
+    def test_verified_cache_reused_and_lru_protects_pending_and_pinned(self, decode, probe, edges):
         with tempfile.TemporaryDirectory() as root:
             download = Mock(side_effect=lambda url, path: path.write_bytes(b'0123456789'))
             cache = AudioCache(root, limit=10, download=download)
