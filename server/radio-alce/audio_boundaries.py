@@ -4,9 +4,10 @@ import logging
 import re
 import subprocess
 from pathlib import Path
+import config
 
 log = logging.getLogger('radio')
-POLICY_VERSION = 2
+POLICY_VERSION = 3
 SILENCE_DB = -80
 MIN_SILENCE_SECONDS = .25
 EDGE_MARGIN_SECONDS = .01
@@ -25,16 +26,14 @@ def measure(path):
     duration = int(times[-1]) / 1_000_000
     intervals = [(float(a), float(b)) for a, b in re.findall(
         r'silence_start: ([\d.]+).*?silence_end: ([\d.]+)', result.stderr, re.S)]
-    start, end = 0., duration
+    start = 0.
     for a, b in intervals:
         if a <= .001 and MIN_SILENCE_SECONDS <= b <= MAX_TRIM_SECONDS:
             start = max(0., b - EDGE_MARGIN_SECONDS)
-        if abs(b - duration) <= .03 and MIN_SILENCE_SECONDS <= duration - a <= MAX_TRIM_SECONDS:
-            end = min(duration, a + EDGE_MARGIN_SECONDS)
-    if end - start < .25:
-        start, end = 0., duration
+    if duration - start < .25:
+        start = 0.
     return {'version': POLICY_VERSION, 'bytes': path.stat().st_size,
-            'decoded_duration': duration, 'start': start, 'end': end}
+            'decoded_duration': duration, 'start': start, 'end': duration}
 
 
 def prepared_boundaries(path, kind):
@@ -53,8 +52,17 @@ def prepared_boundaries(path, kind):
         tmp = sidecar.with_suffix('.tmp')
         tmp.write_text(json.dumps(data))
         tmp.replace(sidecar)
-    start = data['start'] if kind in ('STATION_ID', 'JINGLE') else 0.
-    end = data['end'] if kind == 'MUSIC' else data['decoded_duration']
-    log.info('AUDIO edges type=%s head=%.3fs tail=%.3fs duration=%.3fs',
-             kind, start, data['decoded_duration'] - end, end - start)
+    if kind == 'MUSIC':
+        end = data['decoded_duration'] - config.MUSIC_END_TRIM_SECONDS
+        if end <= 0:
+            raise ValueError(
+                f'MUSIC shorter than mandatory {config.MUSIC_END_TRIM_SECONDS:.0f}s end trim')
+        start = 0.
+    else:
+        start = data['start']
+        end = data['decoded_duration']
+    log.info('AUDIO edges type=%s head=%.3fs fixed_tail=%.3fs duration=%.3fs',
+             kind, start,
+             config.MUSIC_END_TRIM_SECONDS if kind == 'MUSIC' else 0.,
+             end - start)
     return {'cue_in': start, 'cue_out': end, 'duration': end - start}

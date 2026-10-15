@@ -275,11 +275,11 @@ class PlannerTests(EngineFixture):
         planner.fill_once()
         self.assertNotEqual(self.store.get('last_music'), planner.ready[0]['item']['id'])
 
-    def test_music_request_carries_fade_and_optional_cue_out(self):
-        self.assertIn('liq_fade_out="15.0"', request_uri(item('m'), 'token'))
+    def test_music_request_always_carries_full_fifteen_second_fade_and_cue_out(self):
+        self.assertIn('liq_fade_out="15.0"', request_uri(item('m', duration=5), 'token'))
         cued = item('m')
-        cued['cue_out'] = 197.25
-        self.assertIn('liq_cue_out="197.25"', request_uri(cued, 'token'))
+        cued['cue_out'] = 180.0
+        self.assertIn('liq_cue_out="180.0"', request_uri(cued, 'token'))
 
     def test_short_pieces_have_no_music_fade_clipping_or_crossfade(self):
         for kind in ['STATION_ID', 'JINGLE', 'NEWS_INTRO', 'NEWS_DROP', 'TIME_ANNOUNCEMENT']:

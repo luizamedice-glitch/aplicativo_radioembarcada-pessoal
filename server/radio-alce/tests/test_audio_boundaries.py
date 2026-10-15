@@ -19,12 +19,20 @@ class BoundaryTests(unittest.TestCase):
             'sine=frequency=440:duration=2', '-af', 'adelay=400,apad=pad_dur=1',
             '-c:a', 'libmp3lame', str(self.path)], check=True)
 
-    def test_music_trims_only_measured_tail_and_preserves_original(self):
-        before = hashlib.sha256(self.path.read_bytes()).digest()
-        result = prepared_boundaries(self.path, 'MUSIC')
+    def test_music_always_ends_twenty_seconds_before_physical_file_end(self):
+        music = Path(self.tmp.name) / 'music.mp3'
+        subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',
+            'sine=frequency=440:duration=25','-c:a','libmp3lame',str(music)],check=True)
+        before = hashlib.sha256(music.read_bytes()).digest()
+        result = prepared_boundaries(music, 'MUSIC')
         self.assertEqual(0, result['cue_in'])
-        self.assertAlmostEqual(2.42, result['cue_out'], delta=.05)
-        self.assertEqual(before, hashlib.sha256(self.path.read_bytes()).digest())
+        self.assertAlmostEqual(5., result['cue_out'], delta=.08)
+        self.assertAlmostEqual(5., result['duration'], delta=.08)
+        self.assertEqual(before, hashlib.sha256(music.read_bytes()).digest())
+
+    def test_music_too_short_for_mandatory_twenty_second_trim_is_rejected(self):
+        with self.assertRaises(ValueError):
+            prepared_boundaries(self.path, 'MUSIC')
 
     def test_inserts_keep_entire_voice_and_tail_only_trim_silent_head(self):
         for kind in ('STATION_ID', 'JINGLE'):
@@ -40,20 +48,20 @@ class BoundaryTests(unittest.TestCase):
             self.assertEqual({}, prepared_boundaries(self.path, kind))
 
     def test_analysis_reused_after_restart(self):
-        result = prepared_boundaries(self.path, 'MUSIC')
+        result = prepared_boundaries(self.path, 'STATION_ID')
         with patch('audio_boundaries.measure', side_effect=AssertionError('unnecessary decode')):
-            self.assertEqual(result, prepared_boundaries(self.path, 'MUSIC'))
+            self.assertEqual(result, prepared_boundaries(self.path, 'STATION_ID'))
 
-    def test_audible_quiet_tail_not_cut(self):
-        self.path.unlink()
-        subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=440:duration=3',
-            '-af','volume=0.001','-c:a','libmp3lame',str(self.path)],check=True)
-        result=prepared_boundaries(self.path,'MUSIC')
-        self.assertAlmostEqual(3.,result['cue_out'],delta=.05)
+    def test_music_end_policy_does_not_depend_on_tail_amplitude(self):
+        quiet = Path(self.tmp.name) / 'quiet.mp3'
+        subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=440:duration=25',
+            '-af','volume=0.001','-c:a','libmp3lame',str(quiet)],check=True)
+        result=prepared_boundaries(quiet,'MUSIC')
+        self.assertAlmostEqual(5.,result['cue_out'],delta=.08)
 
-    def test_internal_silence_not_removed(self):
-        self.path.unlink()
-        subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=440:duration=4',
-            '-af',"volume=0:enable='between(t,1,2)'",'-c:a','libmp3lame',str(self.path)],check=True)
-        result=prepared_boundaries(self.path,'MUSIC')
-        self.assertAlmostEqual(4.,result['duration'],delta=.05)
+    def test_internal_silence_does_not_change_fixed_music_end(self):
+        internal = Path(self.tmp.name) / 'internal.mp3'
+        subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=440:duration=25',
+            '-af',"volume=0:enable='between(t,1,2)'",'-c:a','libmp3lame',str(internal)],check=True)
+        result=prepared_boundaries(internal,'MUSIC')
+        self.assertAlmostEqual(5.,result['duration'],delta=.08)

@@ -32,7 +32,7 @@ def request_uri(item, token):
                 'liq_gain': config.GAINS.get(item['type'], .8),
                 'radio_duration': item.get('duration', 0.),
                 'radio_fade_floor': config.MUSIC_FADE_FLOOR,
-                'liq_fade_out': min(config.MUSIC_FADE_SECONDS, item.get('duration', 30.) / 2) if item['type'] == 'MUSIC' else 0.,
+                'liq_fade_out': config.MUSIC_FADE_SECONDS if item['type'] == 'MUSIC' else 0.,
                 'liq_fade_in': .1 if item['type'] == 'MUSIC' else .15}
     if 'cue_in' in item:
         metadata['liq_cue_in'] = item['cue_in']
