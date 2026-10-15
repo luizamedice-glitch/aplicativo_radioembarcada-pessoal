@@ -21,7 +21,7 @@ somente por build LOCAL_FALLBACK explícito, sem troca automática. Manifest/Con
 selecionam um único serviço e RadioApplication impede programação local no STREAM.
 Os tópicos históricos abaixo descrevem este fallback. O servidor agora implementa
 pools dinâmicos de vinhetas/jingles, vinheta institucional em toda fronteira normal e jingle por relógio no máximo uma vez por hora, notícias de
-4 h, histórico SQLite de 6 h, cache/preload local, corte fixo de 20 s no fim físico de toda MUSIC e fade de 15 s antes do novo boundary.
+4 h, hora certa independente da cadência de notícias, histórico SQLite de 6 h, cache/preload local, corte fixo de 20 s no fim físico de toda MUSIC e fade de 15 s antes do novo boundary.
 Hora FreeTTS opcional usa São Paulo e é omitida se o boundary atrasar mais de 60 s.
 Deploy/rollback pela EC2 Instance Connect: server/radio-alce/README.md. O fallback mantém
 as regras antigas, incluindo notícias de 60 min.
@@ -53,7 +53,7 @@ A última configuração válida é salva privadamente; falhas usam a versão sa
 
 RemoteNewsProvider é separado dos provedores musicais/institucionais: RSS Radioagência Nacional → NewsItem → NEWS_INTRO/NEWS_DROP → programação → mesmo Media3/cache/sessão. Intervalo de 60 minutos ativos (pausa/foco/buffering não contam), candidato resolvido antecipadamente, notícias das últimas 24 h com histórico de 100 IDs e crédito da fonte. A página oficial é consultada quando não há enclosure; MP3/redirects devem permanecer em domínios EBC e links indisponíveis são ignorados.
 
-Uma reserva editorial substitui a inserção normal de uma fronteira futura, adiando-a sem consumir seu ciclo/bag. Intro → notícia → música é indivisível; cada item termina integralmente, com preload oficial e readiness comprovada. Se o áudio não estiver preparado antes do boundary, a fila normal é restaurada; falhas editoriais não encerram a rádio. Histórico, último horário e relógio ativo são persistidos privadamente. DEBUG aceita intervalo de 3/5 minutos para teste, release mantém 60 minutos. Não há nova tela, backend ou áudio empacotado. Workflow existente valida testes/lint/APK e disponibiliza o Artifact.
+Uma reserva editorial substitui a inserção normal de uma fronteira futura, adiando-a sem consumir seu ciclo/bag. A hora certa não depende mais desse bloco: ela é avaliada em toda fronteira segura entre músicas e, quando coincide com notícia, permanece entre a intro e o drop. Intro → notícia → música é indivisível; cada item termina integralmente, com preload oficial e readiness comprovada. Se o áudio não estiver preparado antes do boundary, a fila normal é restaurada; falhas editoriais não encerram a rádio. Histórico, último horário e relógio ativo são persistidos privadamente. DEBUG aceita intervalo de 3/5 minutos para teste, release mantém 60 minutos. Não há nova tela, backend ou áudio empacotado. Workflow existente valida testes/lint/APK e disponibiliza o Artifact.
 
 ## Atualização autorizada — histórico musical entre sessões
 

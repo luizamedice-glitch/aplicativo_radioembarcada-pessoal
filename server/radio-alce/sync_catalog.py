@@ -56,6 +56,7 @@ class Planner:
         self.sequence = 0
         self.started_sequence = -1
         self.news_reserved = set()
+        self.last_time_slot = engine.storage.get('last_time_slot', 0)
         self.emergency = []
         emergency_snapshot = self.cache.directory.parent / 'emergency.json'
         if emergency_snapshot.exists():
@@ -108,6 +109,21 @@ class Planner:
             self.end_of_plan += item['duration']
         log.info('NEXT %s id=%s; cached/probed=true', item['type'], item['id'])
 
+    def _time_announcement(self, boundary):
+        with self.lock:
+            pending = any(
+                entry['item']['type'] == 'TIME_ANNOUNCEMENT'
+                for entry in list(self.ready) + list(self.delivered.values())
+                if not entry.get('started')
+            )
+        if pending:
+            return None
+        item = self.times.ready(boundary)
+        if item is None or item['slot'] <= self.last_time_slot:
+            return None
+        log.info('TIME scheduled slot=%.0f at safe boundary=%.0f', item['slot'], boundary)
+        return item
+
     def _news_block(self, boundary):
         played = self.engine.storage.played_news() | self.news_reserved
         candidate = self.news.candidate(played, self.cache.prepare)
@@ -119,8 +135,9 @@ class Planner:
         except Exception:
             log.warning('NEWS intro unavailable; block cancelled, music continues')
             return None
-        # Announce only a valid cached slot at the projected start after the complete intro.
-        announcement = self.times.ready(boundary + intro['duration'])
+        # Hora certa remains independent from the 4-hour news cadence; when both coincide,
+        # it stays inside the news block after the intro without changing audio transitions.
+        announcement = self._time_announcement(boundary + intro['duration'])
         self.engine.reserve_news(boundary)
         self.news_reserved.add(candidate['id'])
         return [intro] + ([announcement] if announcement else []) + [candidate]
@@ -166,6 +183,10 @@ class Planner:
         inserts = None
         if self.engine.news_due(boundary):
             inserts = self._news_block(boundary)
+        if inserts is None:
+            announcement = self._time_announcement(boundary)
+            if announcement is not None:
+                inserts = [announcement]
         if inserts is None:
             with self.lock:
                 pending_jingle = any(
@@ -268,6 +289,10 @@ class Planner:
             self.engine.started(value['item'], value['checkpoint'])
             if value['item']['type'] == 'NEWS_DROP':
                 self.news_reserved.discard(value['item']['id'])
+            if value['item']['type'] == 'TIME_ANNOUNCEMENT':
+                self.last_time_slot = value['item']['slot']
+                self.engine.storage.put('last_time_slot', self.last_time_slot)
+                log.info('TIME played slot=%.0f', self.last_time_slot)
             # Correct forecast to the real on-air start; all following items are already known.
             pending = [entry for entry in self.delivered.values() if not entry.get('started')] + list(self.ready)
             self.end_of_plan = self.clock() + value['item']['duration'] + sum(entry['item']['duration'] for entry in pending)

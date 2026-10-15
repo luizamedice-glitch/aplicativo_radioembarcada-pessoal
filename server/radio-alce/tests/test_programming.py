@@ -240,6 +240,32 @@ class PlannerTests(EngineFixture):
         self.assertFalse(self.store.history())
         self.assertTrue(all(entry['item'].get('path') for entry in planner.ready))
 
+
+    def test_hour_announcement_is_independent_from_news_and_replaces_normal_insert(self):
+        planner = self.planner()
+        class Times:
+            def ready(_, boundary):
+                return {'id':'time-fixture','type':'TIME_ANNOUNCEMENT','title':'Hora certa',
+                        'path':'/data/cache/time.mp3','duration':3,'slot':boundary}
+        planner.times = Times()
+        planner.fill_once()
+        planner.end_of_plan = self.now
+        planner.fill_once()
+        self.assertEqual(['MUSIC','TIME_ANNOUNCEMENT','MUSIC'],
+                         [entry['item']['type'] for entry in planner.ready])
+
+    def test_hour_slot_is_persisted_only_after_actual_playback(self):
+        planner = self.planner()
+        slot = self.now
+        value = {'id':'time-fixture','type':'TIME_ANNOUNCEMENT','title':'Hora certa',
+                 'path':'/data/cache/time.mp3','duration':3,'slot':slot}
+        planner._append(value)
+        token = planner.ready[-1]['token']
+        planner.next()
+        self.assertEqual(0, self.store.get('last_time_slot', 0))
+        planner.started(token)
+        self.assertEqual(slot, self.store.get('last_time_slot'))
+
     def test_news_replaces_only_one_slot_and_never_consumes_cycle(self):
         planner = self.planner(item('news', 'NEWS_DROP', 60))
         self.engine.position = 1
