@@ -20,8 +20,8 @@ A implementação anterior integral está em LocalFallbackRadioService, disponí
 somente por build LOCAL_FALLBACK explícito, sem troca automática. Manifest/Controller
 selecionam um único serviço e RadioApplication impede programação local no STREAM.
 Os tópicos históricos abaixo descrevem este fallback. O servidor agora implementa
-pools dinâmicos (oito vinhetas/três jingles atuais), ciclo institucional, notícias de
-30 min, histórico SQLite de 6 h, cache/preload local e fade exclusivo de MUSIC.
+pools dinâmicos de vinhetas/jingles, vinheta institucional em toda fronteira normal e jingle por relógio no máximo uma vez por hora, notícias de
+4 h, histórico SQLite de 6 h, cache/preload local e fade exclusivo de MUSIC.
 Hora FreeTTS opcional usa São Paulo e é omitida se o boundary atrasar mais de 60 s.
 Deploy/rollback pela EC2 Instance Connect: server/radio-alce/README.md. O fallback mantém
 as regras antigas, incluindo notícias de 60 min.
@@ -42,7 +42,7 @@ Nenhuma licença do MVP é presumida suficiente para operação comercial. Publi
 
 ## Atualização autorizada — programação remota da estação
 
-RemoteProgrammingProvider carrega programming.json do R2, separado do MusicProvider. A programação publicada versão 4 contém sete STATION_ID e três JINGLE. A correção autorizada é **uma peça em toda mudança de música**, em ciclo STATION_ID → STATION_ID → JINGLE. O jingle substitui a vinheta na terceira troca. ProgrammingRules centraliza o padrão, ProgrammingSequencer mantém posição entre lotes e bags independentes sem repetição imediata. Os pools incluem todos os itens remotos, sem limite fixo; nova versão reconstrói os bags no agendamento seguinte preservando ciclo, último item selecionado e áudio já em reprodução. O campo legado songsBetweenInsertions não espaça músicas nesta fase.
+RemoteProgrammingProvider carrega programming.json do R2, separado do MusicProvider. A programação publicada versão 4 contém sete STATION_ID e três JINGLE. A regra ativa é **uma peça em toda mudança de música**: normalmente STATION_ID; quando completar 1 hora desde o último JINGLE realmente reproduzido, o próximo boundary elegível usa JINGLE no lugar da vinheta. Se o jingle ainda não estiver devido ou estiver indisponível, a vinheta continua sendo reproduzida — nunca se cria um slot vazio entre músicas. ProgrammingRules centraliza o padrão, ProgrammingSequencer mantém posição entre lotes e bags independentes sem repetição imediata. Os pools incluem todos os itens remotos, sem limite fixo; nova versão reconstrói os bags no agendamento seguinte preservando ciclo, último item selecionado e áudio já em reprodução. O campo legado songsBetweenInsertions não espaça músicas nesta fase.
 
 TransitionPolicy/AudioTransitionController aplicam saída de MUSIC nos últimos 15 s, entrada curta de peça (150 ms) e de música (100 ms). Peças tocam integralmente, sem crossfade/overlap; avanço natural na mesma instância ExoPlayer. Ganhos centralizados (saída musical com piso de 10%) e preload oficial de playlist da peça/próxima música usam o pipeline/cache existente. Readiness exige MediaPeriod preparado, trilha selecionada e áudio efetivamente em buffer; a presença na timeline não basta. A remoção autorizada de silêncio inicial utiliza um AudioProcessor PCM: somente frames exatamente zero no início de STATION_ID/JINGLE, depois do trimming do encoder, com contagem no relógio oficial do sink. Fala, pausas internas e cauda são preservadas; não há clipping fixo nem early-handoff. Pause preserva posição e programação.
 

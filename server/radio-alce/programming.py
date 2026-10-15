@@ -125,30 +125,38 @@ class ProgrammingEngine:
         when = self.clock() if boundary is None else boundary
         return when - self.last_jingle_at >= config.JINGLE_INTERVAL
 
-    def insertion(self, programming, prepare, allow_jingle=True):
+    def insertion(self, programming, prepare, allow_jingle=False):
+        """Every normal boundary gets one insert: hourly JINGLE when due, otherwise STATION_ID.
+
+        The old STATION_ID/STATION_ID/JINGLE cycle is intentionally no longer used for
+        scheduling. Its position remains in persisted state only for rollback compatibility.
+        A deferred or unavailable jingle must never create a blank insert slot.
+        """
         self.update(programming)
-        kind = config.INSERTION_PATTERN[self.position]
-        if kind == 'JINGLE' and not allow_jingle:
-            self.position = (self.position + 1) % len(config.INSERTION_PATTERN)
-            log.info('INTERSTITIAL JINGLE deferred; 1-hour interval not reached')
-            return None
-        pool = self.available(programming['stationIds' if kind == 'STATION_ID' else 'jingles'])
-        bag = self.stations if kind == 'STATION_ID' else self.jingles
-        for _ in range(len(pool)):
-            item = bag.next(pool)
-            try:
-                prepared = prepare(item)
-                self.position = (self.position + 1) % len(config.INSERTION_PATTERN)
-                log.info('INTERSTITIAL %s: %s; bag remaining=%s', kind, item['title'], len(bag.remaining))
-                return prepared
-            except Exception:
-                self.failed(item)
-                pool = self.available(pool)
-                if not pool:
-                    break
-        # One slot only; never substitute a jingle+station ID combination.
-        self.position = (self.position + 1) % len(config.INSERTION_PATTERN)
-        log.warning('INTERSTITIAL %s unavailable; following MUSIC directly', kind)
+        preferred = 'JINGLE' if allow_jingle else 'STATION_ID'
+        kinds = [preferred] + (['STATION_ID'] if preferred == 'JINGLE' else [])
+        for kind in kinds:
+            pool = self.available(programming['stationIds' if kind == 'STATION_ID' else 'jingles'])
+            bag = self.stations if kind == 'STATION_ID' else self.jingles
+            for _ in range(len(pool)):
+                item = bag.next(pool)
+                try:
+                    prepared = prepare(item)
+                    if kind == 'JINGLE':
+                        log.info('INTERSTITIAL JINGLE hourly slot: %s; bag remaining=%s',
+                                 item['title'], len(bag.remaining))
+                    else:
+                        log.info('INTERSTITIAL STATION_ID: %s; bag remaining=%s',
+                                 item['title'], len(bag.remaining))
+                    return prepared
+                except Exception:
+                    self.failed(item)
+                    pool = self.available(pool)
+                    if not pool:
+                        break
+            if kind == 'JINGLE':
+                log.warning('INTERSTITIAL JINGLE unavailable; using STATION_ID for this boundary')
+        log.warning('INTERSTITIAL STATION_ID unavailable; following MUSIC directly')
         return None
 
     def news_due(self, boundary):

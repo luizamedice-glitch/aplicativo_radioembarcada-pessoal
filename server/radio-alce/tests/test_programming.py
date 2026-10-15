@@ -96,24 +96,32 @@ class EngineTests(EngineFixture):
             self.assertFalse(restarted.news_due(self.now + 14400))
             self.assertTrue(restarted.news_due(self.now + 18000))
 
-    def test_pattern_is_exactly_station_station_jingle_when_jingle_is_allowed(self):
+    def test_station_id_fills_every_boundary_until_hourly_jingle_is_due(self):
         p = programming()
-        values = [self.engine.insertion(p, lambda value: value, allow_jingle=True)['type'] for _ in range(12)]
-        self.assertEqual(list(config.INSERTION_PATTERN) * 4, values)
+        for _ in range(6):
+            self.assertEqual('STATION_ID', self.engine.insertion(
+                p, lambda value: value, allow_jingle=False)['type'])
 
-    def test_jingle_slot_is_silent_until_one_hour_has_elapsed(self):
+    def test_jingle_is_time_based_and_resets_only_after_actual_playback(self):
         p = programming()
-        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
-        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
-        self.assertIsNone(self.engine.insertion(p, lambda value: value, allow_jingle=False))
+        self.assertFalse(self.engine.jingle_due())
         self.now += config.JINGLE_INTERVAL
         self.assertTrue(self.engine.jingle_due())
-        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
-        self.assertEqual('STATION_ID', self.engine.insertion(p, lambda value: value)['type'])
         jingle = self.engine.insertion(p, lambda value: value, allow_jingle=True)
         self.assertEqual('JINGLE', jingle['type'])
+        # Preparation alone does not consume the one-hour clock.
+        self.assertTrue(self.engine.jingle_due())
         self.engine.started(jingle, self.engine.checkpoint())
         self.assertFalse(self.engine.jingle_due())
+
+    def test_unavailable_hourly_jingle_falls_back_to_station_id_not_music(self):
+        p = programming()
+        def prepare(value):
+            if value['type'] == 'JINGLE':
+                raise ValueError('fixture jingle failure')
+            return value
+        selected = self.engine.insertion(p, prepare, allow_jingle=True)
+        self.assertEqual('STATION_ID', selected['type'])
 
     def test_independent_bags_use_all_eight_and_all_three_without_immediate_repeats(self):
         p = programming()
@@ -184,13 +192,17 @@ class EngineTests(EngineFixture):
         def prepare(value):
             if value['id'] in {'s0', 's1', 'j0'}: raise ValueError('fixture')
             return value
-        for _ in range(15):
-            selected = self.engine.insertion(p, prepare)
-            self.assertNotIn(selected['id'], {'s0', 's1', 'j0'})
+        for _ in range(8):
+            selected = self.engine.insertion(p, prepare, allow_jingle=False)
+            self.assertNotIn(selected['id'], {'s0', 's1'})
+        selected = self.engine.insertion(p, prepare, allow_jingle=True)
+        self.assertEqual('JINGLE', selected['type'])
+        self.assertNotEqual('j0', selected['id'])
 
     def test_all_short_files_invalid_returns_music_without_stopping(self):
         def broken(_): raise ValueError('fixture')
-        for _ in range(3): self.assertIsNone(self.engine.insertion(programming(), broken))
+        for _ in range(3):
+            self.assertIsNone(self.engine.insertion(programming(), broken, allow_jingle=False))
         self.assertIsNotNone(self.engine.music([item('m')]))
 
     def test_single_music_catalog_never_strands_a_short_insert(self):

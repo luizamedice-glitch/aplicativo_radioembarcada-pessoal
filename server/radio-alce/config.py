@@ -12,6 +12,7 @@ REPEAT_WINDOWS = (6 * 3600, 3 * 3600, 90 * 60, 0)
 ARTIST_WINDOW = 90 * 60
 HISTORY_RETENTION = 48 * 3600
 HISTORY_LIMIT = 500
+# Legacy rollback compatibility only; active scheduling is time-based in ProgrammingEngine.insertion.
 INSERTION_PATTERN = ('STATION_ID', 'STATION_ID', 'JINGLE')
 JINGLE_INTERVAL = 60 * 60
 NEWS_INTERVAL = 4 * 60 * 60
