@@ -241,7 +241,7 @@ class PlannerTests(EngineFixture):
         self.assertTrue(all(entry['item'].get('path') for entry in planner.ready))
 
 
-    def test_hour_announcement_is_independent_from_news_and_replaces_normal_insert(self):
+    def test_hour_announcement_is_additive_and_never_replaces_normal_insert(self):
         planner = self.planner()
         class Times:
             def ready(_, boundary):
@@ -251,7 +251,7 @@ class PlannerTests(EngineFixture):
         planner.fill_once()
         planner.end_of_plan = self.now
         planner.fill_once()
-        self.assertEqual(['MUSIC','TIME_ANNOUNCEMENT','MUSIC'],
+        self.assertEqual(['MUSIC','STATION_ID','TIME_ANNOUNCEMENT','MUSIC'],
                          [entry['item']['type'] for entry in planner.ready])
 
     def test_hour_slot_is_persisted_only_after_actual_playback(self):

@@ -184,10 +184,6 @@ class Planner:
         if self.engine.news_due(boundary):
             inserts = self._news_block(boundary)
         if inserts is None:
-            announcement = self._time_announcement(boundary)
-            if announcement is not None:
-                inserts = [announcement]
-        if inserts is None:
             with self.lock:
                 pending_jingle = any(
                     entry['item']['type'] == 'JINGLE'
@@ -198,6 +194,13 @@ class Planner:
             insertion = self.engine.insertion(
                 self.catalogs.programming, self.cache.prepare, allow_jingle=allow_jingle)
             inserts = [insertion] if insertion else []
+            # Hora certa is additive. Never let a late/expired TIME_ANNOUNCEMENT replace
+            # the normal station ID/jingle, otherwise Liquidsoap may discard the stale
+            # time request and leave MUSIC -> MUSIC with no institutional piece.
+            announcement_boundary = boundary + sum(item['duration'] for item in inserts)
+            announcement = self._time_announcement(announcement_boundary)
+            if announcement is not None:
+                inserts.append(announcement)
         # Publish the fully prepared block atomically; /next cannot observe a lone insert.
         with self.lock:
             for item in inserts:
