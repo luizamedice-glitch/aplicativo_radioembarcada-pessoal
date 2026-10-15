@@ -78,6 +78,9 @@ def program_started(_track_metadata) =
 end
 program.on_track(synchronous=true, program_started)
 
+# Select the raw source first: volume processing must never select emergency.
+radio = fallback(track_sensitive=true, [program, emergency])
+
 # BEGIN AUDIO TRANSITIONS
 log("AUDIO pipeline=clock-envelope-v1; measured cues; no overlap")
 # The planner measured decoded duration/cue points before enqueueing this request.
@@ -91,9 +94,13 @@ track_fade_in = ref(0.)
 track_fade_floor = ref(0.03)
 
 def start_envelope(m) =
-  track_started_at.set(program.time())
+  track_started_at.set(radio.time())
   track_duration.set(max(0., float_of_string(default=0., m["radio_duration"])))
   track_gain.set(max(0., min(1., float_of_string(default=0.9, m["liq_gain"]))))
+  if m["radio_token"] == "" then
+    # Emergency already has fixed gain; never amplify/fade it a second time.
+    track_gain.set(1.)
+  end
   # Defensive type check: an insert can NEVER inherit a MUSIC fade-out.
   track_fade_out.set(
     if m["program_type"] == "MUSIC" then
@@ -104,10 +111,10 @@ def start_envelope(m) =
   kind = m["program_type"]
   log("AUDIO envelope type=#{kind} duration=#{track_duration()}s fade_out=#{track_fade_out()}s gain=#{track_gain()}")
 end
-program.on_track(synchronous=true, start_envelope)
+radio.on_track(synchronous=true, start_envelope)
 
 def envelope_gain() =
-  elapsed = max(0., program.time() - track_started_at())
+  elapsed = max(0., radio.time() - track_started_at())
   remaining = max(0., track_duration() - elapsed)
   entrance = if track_fade_in() > 0. then min(1., elapsed / track_fade_in()) else 1. end
   exit_gain =
@@ -116,9 +123,9 @@ def envelope_gain() =
     else 1. end
   track_gain() * entrance * exit_gain
 end
-program = amplify(override=null, envelope_gain, program)
+radio = amplify(override=null, envelope_gain, radio)
 # END AUDIO TRANSITIONS
-radio = fallback(track_sensitive=true, [program, emergency])
+
 
 def acknowledge(track_metadata) =
   token = list.assoc(default="", "radio_token", track_metadata)

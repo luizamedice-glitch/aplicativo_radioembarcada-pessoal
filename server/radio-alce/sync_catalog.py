@@ -36,6 +36,7 @@ def request_uri(item, token):
                 'liq_fade_in': .1 if item['type'] == 'MUSIC' else .15}
     if 'cue_in' in item:
         metadata['liq_cue_in'] = item['cue_in']
+    if 'cue_out' in item:
         metadata['liq_cue_out'] = item['cue_out']
     if item['type'] == 'TIME_ANNOUNCEMENT':
         metadata['time_valid_until'] = item['slot'] + config.TIME_MAX_LATENESS

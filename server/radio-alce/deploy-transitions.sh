@@ -37,6 +37,8 @@ lines += ['COMPOSE_PROJECT_NAME=' + os.environ['COMPOSE_PROJECT_NAME'],
           'LIQUIDSOAP_CONFIG=' + os.environ['LIQUIDSOAP_CONFIG']]
 p.write_text('\n'.join(lines) + '\n')
 PY
+# Liquidsoap runs unprivileged, even if the checkout used a restrictive umask.
+chmod 644 liquidsoap/radio.liq
 # No service changes until config, build, tests and Liquidsoap syntax all pass.
 docker compose config --quiet
 docker compose build catalog

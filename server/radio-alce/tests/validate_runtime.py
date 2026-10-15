@@ -219,6 +219,9 @@ def main():
                 captures=[future.result() for future in futures]
             shared = captures[0][100000:140000]
             assert shared in captures[1], 'Listeners must receive the same encoded signal'
+            if stage == 'production' and os.getenv('ALCE_TEST_EMERGENCY')!='1':
+                logs=docker('logs',tag+'-liquidsoap')
+                assert 'EMERGENCY active' not in logs, 'Normal track boundaries must not switch to emergency'
             events=[json.loads(line) for line in (data/'events.jsonl').read_text().splitlines()]
             types=[e['type'] for e in events]
             expected=(['MUSIC','NEWS_INTRO','NEWS_DROP','MUSIC','STATION_ID','MUSIC','STATION_ID','MUSIC','JINGLE','MUSIC']

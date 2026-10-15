@@ -299,7 +299,7 @@ Teste local isolado com a imagem Liquidsoap 2.4.6 fixada no Compose, mesmo
 - Dois ouvintes receberam o mesmo sinal codificado; nenhuma fila por cliente.
 - Emergency com planner suspenso: zero janelas silenciosas de 100 ms,
   retomada da programação confirmada, nenhum erro de parsing M3U.
-- 53 testes do servidor, inclusive dentro da imagem catalog, e 34 testes dos
+- 54 testes do servidor, inclusive dentro da imagem catalog, e 34 testes dos
   scripts aprovados; imagem catalog compilada e Liquidsoap `--check` aprovado.
 
 A/B também reproduziu o defeito histórico de `fade.out` sem reset: −91 dB.
@@ -312,3 +312,10 @@ Estas são medições locais, não uma declaração de deploy/escuta na EC2. A v
 final deve ouvir várias trocas do catálogo real após conferir os hashes dos
 containers implantados. MP3 com silêncio artístico acima do limite conservador
 não são recortados por esta política.
+
+A integração com as alterações concorrentes `b28cb12`/`79c39cc` preserva a
+seleção de fonte **antes** do processamento de volume, evitando que um operador
+de fade leve o fallback a escolher emergency numa transição normal. A análise
+persistente de bordas substitui o scanner anterior de cauda; não são aplicados
+dois recortes/fades. O teste de cue-out e a asserção de que produção não ativa
+emergency durante transições normais permanecem na regressão.
