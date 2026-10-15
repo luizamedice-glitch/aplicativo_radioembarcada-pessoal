@@ -81,3 +81,18 @@ A disponibilidade do alias `radioalce.vercel.app` e a permissão de criar o proj
 precisam ser confirmadas na conta Vercel. Não anunciar a URL como publicada antes
 de concluir e verificar o deployment. Para rollback, promover o deployment anterior
 do mesmo projeto; isso não modifica a rádio central.
+
+## Compartilhamento no WhatsApp
+
+O HTML inicial inclui Open Graph com título **Rádio Alce**, descrição
+**Sua Rádio em Movimento** e `public/radio-alce-share-v1.jpg`: arte exclusiva
+para compartilhamento, quadrada (1254×1254), fundo opaco e margens. O JPEG leve
+é servido por HTTPS com URL absoluta, MIME, dimensões e texto alternativo.
+Não depende de JavaScript; logo da interface e arte do MediaSession permanecem intactos.
+
+O domínio no cartão e a URL no corpo da mensagem são controlados pelo WhatsApp;
+Open Graph não permite escondê-los. A imagem e os textos podem ficar em cache
+no WhatsApp, inclusive em mensagens já enviadas. Para testar uma nova consulta,
+compartilhar `https://radioalce.vercel.app/?share=logo-v1`; a página canônica
+continua sendo a raiz. A prévia pode depender das configurações de privacidade
+do destinatário/remetente. Validar também no WhatsApp real após publicação.
