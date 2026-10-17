@@ -108,15 +108,28 @@ class Handler(BaseHTTPRequestHandler):
         expected = 'Basic ' + base64.b64encode(f'{USER}:{PASSWORD}'.encode()).decode()
         return self.headers.get('Authorization') == expected
     def do_GET(self):
-        if not self.auth():
-            self.send_response(401); self.send_header('WWW-Authenticate','Basic realm="Radio Alce Stats"'); self.end_headers(); return
         data = snapshot()
-        if self.path == '/stats.json':
-            body = json.dumps(data, ensure_ascii=False).encode()
+        if self.path == '/summary.json':
+            body = json.dumps({
+                'listeners': data['listeners'],
+                'listener_peak': data['listener_peak'],
+                'connections_today': data['connections_today'],
+                'unique_today': data['unique_today'],
+                'daily': data['daily'],
+                'recent': data['recent'],
+                'updated_at': data['updated_at'],
+                'offline': data.get('offline', False),
+            }, ensure_ascii=False).encode()
             ctype = 'application/json; charset=utf-8'
         else:
-            body = page(data).encode()
-            ctype = 'text/html; charset=utf-8'
+            if not self.auth():
+                self.send_response(401); self.send_header('WWW-Authenticate','Basic realm="Radio Alce Stats"'); self.end_headers(); return
+            if self.path == '/stats.json':
+                body = json.dumps(data, ensure_ascii=False).encode()
+                ctype = 'application/json; charset=utf-8'
+            else:
+                body = page(data).encode()
+                ctype = 'text/html; charset=utf-8'
         self.send_response(200); self.send_header('Content-Type', ctype); self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(body)
 
 ThreadingHTTPServer(('0.0.0.0', 8082), Handler).serve_forever()
