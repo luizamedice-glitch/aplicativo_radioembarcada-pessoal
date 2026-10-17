@@ -3,6 +3,8 @@ import copy
 import logging
 import random
 import time
+import re
+import unicodedata
 from collections import deque
 import config
 
@@ -10,6 +12,11 @@ log = logging.getLogger('radio')
 
 # Compatibility only: old checkpoints encoded epoch time in half-hour slots.
 LEGACY_NEWS_SLOT_SECONDS = 30 * 60
+
+def normalized_title(value):
+    text = unicodedata.normalize('NFKD', str(value or '')).encode('ascii', 'ignore').decode().casefold()
+    return ' '.join(re.findall(r'[a-z0-9]+', text))
+
 
 
 class ShuffleBag:
@@ -135,8 +142,13 @@ class ProgrammingEngine:
         self.update(programming)
         preferred = 'JINGLE' if allow_jingle else 'STATION_ID'
         kinds = [preferred] + (['STATION_ID'] if preferred == 'JINGLE' else [])
+        reserved_station_titles = {station for _, station in config.MUSIC_STATION_ID_PAIRS}
         for kind in kinds:
-            pool = self.available(programming['stationIds' if kind == 'STATION_ID' else 'jingles'])
+            source = programming['stationIds' if kind == 'STATION_ID' else 'jingles']
+            if kind == 'STATION_ID':
+                source = [item for item in source if not any(
+                    needle in normalized_title(item.get('title')) for needle in reserved_station_titles)]
+            pool = self.available(source)
             bag = self.stations if kind == 'STATION_ID' else self.jingles
             for _ in range(len(pool)):
                 item = bag.next(pool)
@@ -157,6 +169,25 @@ class ProgrammingEngine:
             if kind == 'JINGLE':
                 log.warning('INTERSTITIAL JINGLE unavailable; using STATION_ID for this boundary')
         log.warning('INTERSTITIAL STATION_ID unavailable; following MUSIC directly')
+        return None
+
+    def paired_insertion(self, programming, music, prepare):
+        """Return a reserved station ID only for its paired music; otherwise None."""
+        music_title = normalized_title(music.get('title'))
+        for music_needle, station_needle in config.MUSIC_STATION_ID_PAIRS:
+            if music_needle not in music_title:
+                continue
+            candidates = [item for item in self.available(programming['stationIds'])
+                          if station_needle in normalized_title(item.get('title'))]
+            for item in candidates:
+                try:
+                    prepared = prepare(item)
+                    log.info('PAIRED STATION_ID: %s -> %s', item['title'], music['title'])
+                    return prepared
+                except Exception:
+                    self.failed(item)
+            log.warning('PAIRED STATION_ID unavailable for MUSIC: %s; using normal insert', music['title'])
+            return None
         return None
 
     def news_due(self, boundary):
