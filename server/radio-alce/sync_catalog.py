@@ -184,16 +184,21 @@ class Planner:
         if self.engine.news_due(boundary):
             inserts = self._news_block(boundary)
         if inserts is None:
-            with self.lock:
-                pending_jingle = any(
-                    entry['item']['type'] == 'JINGLE'
-                    for entry in list(self.ready) + list(self.delivered.values())
-                    if not entry.get('started')
-                )
-            allow_jingle = (not pending_jingle) and self.engine.jingle_due(boundary)
-            insertion = self.engine.insertion(
-                self.catalogs.programming, self.cache.prepare, allow_jingle=allow_jingle)
-            inserts = [insertion] if insertion else []
+            paired = self.engine.paired_insertion(
+                self.catalogs.programming, following, self.cache.prepare)
+            if paired is not None:
+                inserts = [paired]
+            else:
+                with self.lock:
+                    pending_jingle = any(
+                        entry['item']['type'] == 'JINGLE'
+                        for entry in list(self.ready) + list(self.delivered.values())
+                        if not entry.get('started')
+                    )
+                allow_jingle = (not pending_jingle) and self.engine.jingle_due(boundary)
+                insertion = self.engine.insertion(
+                    self.catalogs.programming, self.cache.prepare, allow_jingle=allow_jingle)
+                inserts = [insertion] if insertion else []
             # Hora certa is additive. Never let a late/expired TIME_ANNOUNCEMENT replace
             # the normal station ID/jingle, otherwise Liquidsoap may discard the stale
             # time request and leave MUSIC -> MUSIC with no institutional piece.
