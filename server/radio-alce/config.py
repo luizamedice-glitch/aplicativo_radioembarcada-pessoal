@@ -5,6 +5,9 @@ from pathlib import Path
 BASE = 'https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev'
 CATALOG_URL = os.getenv('MUSIC_CATALOG_URL', BASE + '/music_catalog.json')
 PROGRAMMING_URL = os.getenv('PROGRAMMING_URL', BASE + '/programming.json')
+DISABLED_PROGRAM_IDS = {value.strip() for value in os.getenv(
+    'DISABLED_PROGRAM_IDS', 'jingle-spot-bifao,jingle-spot-salao-flack'
+).split(',') if value.strip()}
 RSS_URL = 'https://agenciabrasil.ebc.com.br/radioagencia-nacional/rss/ultimasnoticias/feed.xml'
 NEWS_INTRO_URL = BASE + '/Vinheta_Noticias_Masterizada.mp3'
 DATA = Path(os.getenv('RADIO_DATA_DIR', '/data'))

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 import urllib.request
+import config
 
 log = logging.getLogger('radio')
 
@@ -46,9 +47,12 @@ def parse_programming(data):
         raise ValueError('Missing station')
     if type(data.get('version')) is not int or data['version'] < 1 or not isinstance(data.get('rules'), dict):
         raise ValueError('Invalid programming')
+    station_ids = [item for item in items(data.get('stationIds'), 'STATION_ID')
+                   if item['id'] not in config.DISABLED_PROGRAM_IDS]
+    jingles = [item for item in items(data.get('jingles'), 'JINGLE')
+               if item['id'] not in config.DISABLED_PROGRAM_IDS]
     return {'stationId': data['stationId'], 'version': data['version'], 'rules': data['rules'],
-            'stationIds': items(data.get('stationIds'), 'STATION_ID'),
-            'jingles': items(data.get('jingles'), 'JINGLE')}
+            'stationIds': station_ids, 'jingles': jingles}
 
 
 def read_url(url, max_bytes=2 * 1024 ** 2):

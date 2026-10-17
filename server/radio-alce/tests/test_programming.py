@@ -332,6 +332,18 @@ class PlannerTests(EngineFixture):
 
 
 class CatalogTests(unittest.TestCase):
+    def test_temporarily_disabled_spots_are_filtered_without_changing_other_jingles(self):
+        p = programming()
+        p['jingles'] += [
+            item('jingle-spot-bifao', 'JINGLE', 30),
+            item('jingle-spot-salao-flack', 'JINGLE', 30),
+        ]
+        parsed = parse_programming(p)
+        ids = {value['id'] for value in parsed['jingles']}
+        self.assertNotIn('jingle-spot-bifao', ids)
+        self.assertNotIn('jingle-spot-salao-flack', ids)
+        self.assertEqual({'j0', 'j1', 'j2'}, ids)
+
     def test_programming_json_is_dynamic_and_invalid_items_are_ignored(self):
         p = programming(); p['stationIds'].append({'id': 'bad', 'type': 'STATION_ID'})
         self.assertEqual(8, len(parse_programming(p)['stationIds']))
