@@ -12,11 +12,13 @@ command -v openssl >/dev/null
 command -v python3 >/dev/null
 
 if [[ ! -f .env ]]; then
-  printf 'ICECAST_SOURCE_PASSWORD=%s\nICECAST_ADMIN_PASSWORD=%s\nFREETTS_API_KEY=\nFREETTS_VOICE=pt-BR-AntonioNeural\nTZ=America/Sao_Paulo\n' \
-    "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" > .env
+  printf 'ICECAST_SOURCE_PASSWORD=%s\nICECAST_ADMIN_PASSWORD=%s\nFREETTS_API_KEY=\nFREETTS_VOICE=pt-BR-AntonioNeural\nTZ=America/Sao_Paulo\nSTATS_USER=radioadmin\nSTATS_PASSWORD=%s\n' \
+    "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" "$(openssl rand -hex 12)" > .env
 fi
 # Append optional settings to old installations without replacing existing credentials.
 if ! grep -q '^FREETTS_API_KEY=' .env; then printf '\nFREETTS_API_KEY=\n' >> .env; fi
+if ! grep -q '^STATS_USER=' .env; then printf '\nSTATS_USER=radioadmin\n' >> .env; fi
+if ! grep -q '^STATS_PASSWORD=' .env; then printf 'STATS_PASSWORD=%s\n' "$(openssl rand -hex 12)" >> .env; fi
 chmod 600 .env
 set -a
 . ./.env
@@ -46,7 +48,7 @@ chmod 755 liquidsoap
 chmod 644 liquidsoap/*.liq
 docker compose config --quiet
 docker compose pull liquidsoap
-docker compose build catalog icecast
+docker compose build catalog icecast stats
 docker compose run --rm --no-deps liquidsoap liquidsoap --check /radio.liq
 printf 'Sintaxe validada; backup local em %s.\n' "$backup"
 if [[ "$mode" == --check ]]; then
@@ -66,7 +68,7 @@ if source.exists():
     print('Checkpoint SQLite salvo no volume persistente.')
 PY
 # A planned source/encoder cutover can briefly reconnect listeners; never use compose down -v.
-docker compose up -d --wait --wait-timeout 120 icecast liquidsoap
+docker compose up -d --wait --wait-timeout 120 icecast liquidsoap stats
 docker compose ps
 python3 - <<'PY'
 import urllib.request

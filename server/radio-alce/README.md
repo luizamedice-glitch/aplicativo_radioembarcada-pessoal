@@ -323,3 +323,16 @@ de fade leve o fallback a escolher emergency numa transição normal. A análise
 persistente de bordas substitui o scanner anterior de cauda; não são aplicados
 dois recortes/fades. O teste de cue-out e a asserção de que produção não ativa
 emergency durante transições normais permanecem na regressão.
+
+
+## Painel de acessos
+
+O serviço `stats` publica um painel protegido por HTTP Basic Auth na porta **8082**. Ele lê o `status-json.xsl` interno do Icecast para ouvintes em tempo real e o volume persistente `icecast-logs` para histórico de conexões. Exibe ouvintes atuais, pico informado pelo Icecast, conexões do dia, IPs únicos do dia, conexões por dia nos últimos 7 dias e dispositivos recentes. Reconexões contam como novas conexões; portanto "conexões" não equivale a pessoas.
+
+Credenciais ficam somente em `.env`:
+
+```bash
+grep -E '^STATS_(USER|PASSWORD)=' .env
+```
+
+Acesso: `http://IP_PUBLICO_DA_EC2:8082/`. Liberar TCP 8082 no Security Group somente para os IPs necessários, sempre que possível. O endpoint JSON protegido é `/stats.json`.
