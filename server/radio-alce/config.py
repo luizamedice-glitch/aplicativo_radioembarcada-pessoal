@@ -18,6 +18,11 @@ HISTORY_LIMIT = 500
 # Legacy rollback compatibility only; active scheduling is time-based in ProgrammingEngine.insertion.
 INSERTION_PATTERN = ('STATION_ID', 'STATION_ID', 'JINGLE')
 JINGLE_INTERVAL = 60 * 60
+# Vinhetas editoriais pareadas: ficam fora do sorteio comum e só antecedem a música indicada.
+MUSIC_STATION_ID_PAIRS = (
+    ("cant stop loving you", "rock internacional"),
+    ("tarzan boy", "disco anos 80"),
+)
 NEWS_INTERVAL = 4 * 60 * 60
 NEWS_MAX_AGE = 24 * 3600
 NEWS_MIN_DURATION = 30
