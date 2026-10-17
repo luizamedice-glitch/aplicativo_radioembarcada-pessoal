@@ -96,6 +96,29 @@ class EngineTests(EngineFixture):
             self.assertFalse(restarted.news_due(self.now + 14400))
             self.assertTrue(restarted.news_due(self.now + 18000))
 
+    def test_reserved_genre_station_ids_never_enter_random_pool(self):
+        p = programming()
+        p['stationIds'] += [
+            dict(item('rock-id', 'STATION_ID', 8), title='Vinheta Rock Internacional'),
+            dict(item('disco-id', 'STATION_ID', 8), title='Disco Anos 80'),
+        ]
+        values = [self.engine.insertion(p, lambda x: x, allow_jingle=False)['id'] for _ in range(20)]
+        self.assertNotIn('rock-id', values)
+        self.assertNotIn('disco-id', values)
+
+    def test_reserved_genre_station_ids_pair_only_with_target_music(self):
+        p = programming()
+        p['stationIds'] += [
+            dict(item('rock-id', 'STATION_ID', 8), title='Rock Internacional'),
+            dict(item('disco-id', 'STATION_ID', 8), title='Disco Anos 80'),
+        ]
+        rock = dict(item('cant-stop'), title="Can't Stop Loving You")
+        disco = dict(item('tarzan'), title='Tarzan Boy')
+        other = dict(item('other'), title='California Dreamin')
+        self.assertEqual('rock-id', self.engine.paired_insertion(p, rock, lambda x: x)['id'])
+        self.assertEqual('disco-id', self.engine.paired_insertion(p, disco, lambda x: x)['id'])
+        self.assertIsNone(self.engine.paired_insertion(p, other, lambda x: x))
+
     def test_station_id_fills_every_boundary_until_hourly_jingle_is_due(self):
         p = programming()
         for _ in range(6):
