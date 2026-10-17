@@ -1,6 +1,6 @@
 {
   "stationId": "alce",
-  "version": 11,
+  "version": 12,
   "rules": {
     "songsBetweenInsertions": 3,
     "alternateInsertionTypes": true,
@@ -98,6 +98,24 @@
       "type": "STATION_ID",
       "title": "Sua melhor companhia — Rádio Alce",
       "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Melhor_Companhia_Com_Trilha.mp3"
+    },
+    {
+      "id": "vinheta-alce-funk-pop",
+      "type": "STATION_ID",
+      "title": "Funk Pop — Rádio Alce",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Funk_Pop.mp3"
+    },
+    {
+      "id": "vinheta-alce-pop-elegante",
+      "type": "STATION_ID",
+      "title": "Pop Elegante — Rádio Alce",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Pop_Elegante.mp3"
+    },
+    {
+      "id": "vinheta-alce-rock-energetico",
+      "type": "STATION_ID",
+      "title": "Rock Energético — Rádio Alce",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Rock_Energetico.mp3"
     }
   ],
   "jingles": [
