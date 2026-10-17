@@ -46,7 +46,9 @@ Pause cancela timers. A sessão web oferece somente Play/Pause/Stop, sem seek/sk
 Volume ajusta `HTMLAudioElement.volume`. Safari/iOS pode reservar esse controle aos
 botões físicos; não usamos WebAudio para contornar a política do navegador.
 Continuidade em segundo plano depende do navegador/SO, não equivale às garantias
-do foreground service Android.
+do foreground service Android. O player não pausa mais em `pagehide`; ao voltar por
+`pageshow`, `visibilitychange` ou `focus`, se o usuário ainda tiver solicitado Play e
+o áudio não estiver tocando, a conexão é reaberta automaticamente.
 
 ## Desenvolvimento e validação
 

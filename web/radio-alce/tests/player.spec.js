@@ -57,3 +57,17 @@ test('failed stream retries and pause cancels it without raw errors',async({page
 test('copied logo is byte-identical to the main Android logo',async()=>{
   const fs=await import('node:fs');expect(fs.readFileSync('public/alce-logo.png').equals(fs.readFileSync('../../app/src/main/res/drawable-nodpi/radio_alce_logo.png'))).toBeTruthy();
 });
+
+test('background lifecycle never pauses requested playback and recovers on return', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button',{name:'Reproduzir rádio'}).click();
+  await expect(page.locator('.radio')).toHaveClass(/is-playing/);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  await expect(page.locator('audio')).toHaveAttribute('src', /\/radio\/stream/);
+  await page.evaluate(() => {
+    const audio = document.querySelector('audio');
+    audio.dispatchEvent(new Event('waiting'));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
+  await expect.poll(() => page.locator('audio').evaluate(a => a.getAttribute('src'))).toContain('/radio/stream');
+});

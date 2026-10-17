@@ -52,7 +52,16 @@ audio.addEventListener('stalled', armWatchdog);
 audio.addEventListener('error', retry); audio.addEventListener('ended', retry);
 audio.addEventListener('pause', () => { playing = false; render(); });
 window.addEventListener('online', () => { if (requested && !playing) { clearTimeout(retryTimer); retryTimer = undefined; connect(); } });
-window.addEventListener('pagehide', pause);
+function recoverIfRequested() {
+  if (!requested || playing) return;
+  clearTimeout(retryTimer); retryTimer = undefined;
+  connect();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) recoverIfRequested();
+});
+window.addEventListener('pageshow', recoverIfRequested);
+window.addEventListener('focus', recoverIfRequested);
 for (const [id, change] of [['volume-down', -.1], ['volume-up', .1]]) document.getElementById(id).addEventListener('click', () => {
   // iOS may reserve output volume for the hardware buttons; do not route audio through WebAudio.
   audio.volume = Math.min(1, Math.max(0, Math.round((audio.volume + change) * 10) / 10));
