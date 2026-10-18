@@ -255,6 +255,27 @@ class PlannerTests(EngineFixture):
         catalogs = type('Catalogs', (), {'music': {'items': [item(f'm{i}') for i in range(30)]}, 'programming': programming()})()
         return Planner(catalogs, self.engine, FakeCache(self.tmp.name), News(), Times(), lambda: self.now)
 
+    def test_italian_block_sequence_and_schedule(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        planner = self.planner()
+        slot = datetime(2026, 10, 18, 15, 0, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        planner.end_of_plan = slot
+        block = planner._italian_block(slot)
+        self.assertEqual(5, len(block))
+        self.assertEqual(['STATION_ID','MUSIC','MUSIC','STATION_ID','MUSIC'],
+                         [value['type'] for value in block])
+        self.assertEqual(3, len({value['id'] for value in block if value['type'] == 'MUSIC'}))
+        self.assertEqual(slot, block[0]['special_block_slot'])
+        self.assertIsNone(planner._italian_block(slot))
+
+    def test_italian_block_only_runs_at_configured_times(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        planner = self.planner()
+        outside = datetime(2026, 10, 18, 16, 30, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        self.assertIsNone(planner._italian_block(outside))
+
     def test_timeline_music_insert_music_is_ready_before_boundary(self):
         planner = self.planner()
         planner.fill_once(); planner.fill_once()
