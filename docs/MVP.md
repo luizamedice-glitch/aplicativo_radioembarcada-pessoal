@@ -53,7 +53,9 @@ A última configuração válida é salva privadamente; falhas usam a versão sa
 
 O servidor reserva um bloco diário às **15:00, 19:00 e 22:00** no fuso `America/Sao_Paulo`. A entrada ocorre no primeiro boundary seguro após o horário, sem interromper a música em andamento. As faixas ficam na pasta R2 `Bloco - Italianas/`, fora de `music/`, portanto nunca entram no sorteio geral.
 
-A sequência é fixa na estrutura e aleatória nas músicas: **vinheta do bloco → 2 músicas distintas sorteadas → vinheta do bloco → 1 terceira música distinta → retorno à programação normal**. O bloco é preparado e publicado atomicamente, sem vinhetas, jingles, notícias ou hora certa intercalados internamente. Cada horário é executado no máximo uma vez e o início real do bloco é persistido no SQLite para evitar repetição após reinício.
+Nos horários de 15:00, 19:00 e 22:00, a **hora certa tem prioridade**. O bloco italiano só é liberado depois que a hora cheia correspondente já tocou, está pendente na fila ou foi preparada para aquele mesmo boundary. Assim não há disputa entre os dois blocos.
+
+A sequência é: **hora certa → vinheta do bloco → 2 músicas distintas sorteadas → vinheta do bloco → 1 terceira música distinta → retorno à programação normal**. O bloco é preparado e publicado atomicamente, sem vinhetas, jingles, notícias ou hora certa intercalados internamente. Cada horário é executado no máximo uma vez e o início real do bloco é persistido no SQLite para evitar repetição após reinício.
 
 ## Atualização autorizada — notícias editoriais
 
