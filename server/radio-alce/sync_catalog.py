@@ -142,24 +142,6 @@ class Planner:
         slot = self._special_block_slot(boundary)
         if slot is None:
             return None
-
-        # The Italian block must come after the top-of-hour announcement.
-        with self.lock:
-            pending_time = next((
-                entry['item'] for entry in list(self.ready) + list(self.delivered.values())
-                if not entry.get('started')
-                and entry['item']['type'] == 'TIME_ANNOUNCEMENT'
-                and entry['item'].get('slot', 0) >= slot
-            ), None)
-
-        announcement = None
-        time_already_covered = self.last_time_slot >= slot or pending_time is not None
-        if not time_already_covered:
-            announcement = self._time_announcement(boundary)
-            if announcement is None or announcement.get('slot', 0) < slot:
-                log.info('ITALIAN BLOCK waiting for top-of-hour announcement slot=%.0f', slot)
-                return None
-
         try:
             chosen = self.engine.rng.sample(list(config.ITALIAN_BLOCK_TRACKS), 3)
             intro = self.cache.prepare(config.ITALIAN_BLOCK_INTRO)
@@ -171,10 +153,9 @@ class Planner:
         first_intro = dict(intro, special_block_slot=slot)
         second_intro = dict(intro)
         self.special_reserved.add(slot)
-        log.info('ITALIAN BLOCK scheduled after TIME slot=%.0f tracks=%s', slot,
+        log.info('ITALIAN BLOCK scheduled slot=%.0f tracks=%s', slot,
                  ','.join(item['title'] for item in chosen))
-        prefix = [announcement] if announcement is not None else []
-        return prefix + [first_intro, songs[0], songs[1], second_intro, songs[2]]
+        return [first_intro, songs[0], songs[1], second_intro, songs[2]]
 
     def _news_block(self, boundary):
         played = self.engine.storage.played_news() | self.news_reserved
