@@ -269,6 +269,21 @@ class PlannerTests(EngineFixture):
         self.assertEqual(slot, block[0]['special_block_slot'])
         self.assertIsNone(planner._italian_block(slot))
 
+    def test_italian_block_skips_unavailable_track(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        planner = self.planner()
+        slot = datetime(2026, 10, 18, 16, 10, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        original = planner.cache.prepare
+        def prepare(value):
+            if value['id'] == 'italiana-tra-te-e-il-mare':
+                raise ValueError('fixture bad track')
+            return original(value)
+        planner.cache.prepare = prepare
+        block = planner._italian_block(slot)
+        self.assertIsNotNone(block)
+        self.assertEqual(3, len([x for x in block if x['type'] == 'MUSIC']))
+
     def test_italian_block_only_runs_at_configured_times(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
