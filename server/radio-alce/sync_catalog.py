@@ -8,6 +8,8 @@ import threading
 import time
 import uuid
 from collections import deque
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -56,6 +58,8 @@ class Planner:
         self.sequence = 0
         self.started_sequence = -1
         self.news_reserved = set()
+        self.special_reserved = set()
+        self.last_special_block_slot = engine.storage.get('last_italian_block_slot', 0)
         self.last_time_slot = engine.storage.get('last_time_slot', 0)
         self.emergency = []
         emergency_snapshot = self.cache.directory.parent / 'emergency.json'
@@ -124,6 +128,34 @@ class Planner:
         log.info('TIME scheduled slot=%.0f at safe boundary=%.0f', item['slot'], boundary)
         return item
 
+    def _special_block_slot(self, boundary):
+        local = datetime.fromtimestamp(boundary, ZoneInfo(config.TIME_ZONE))
+        for hour, minute in config.ITALIAN_BLOCK_TIMES:
+            slot = local.replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
+            if (slot <= boundary <= slot + config.ITALIAN_BLOCK_MAX_LATENESS
+                    and slot > self.last_special_block_slot
+                    and slot not in self.special_reserved):
+                return slot
+        return None
+
+    def _italian_block(self, boundary):
+        slot = self._special_block_slot(boundary)
+        if slot is None:
+            return None
+        try:
+            chosen = self.engine.rng.sample(list(config.ITALIAN_BLOCK_TRACKS), 3)
+            intro = self.cache.prepare(config.ITALIAN_BLOCK_INTRO)
+            songs = [self.cache.prepare(item) for item in chosen]
+        except Exception:
+            log.warning('ITALIAN BLOCK unavailable at slot=%.0f; normal programming continues', slot)
+            return None
+        first_intro = dict(intro, special_block_slot=slot)
+        second_intro = dict(intro)
+        self.special_reserved.add(slot)
+        log.info('ITALIAN BLOCK scheduled slot=%.0f tracks=%s', slot,
+                 ','.join(item['title'] for item in chosen))
+        return [first_intro, songs[0], songs[1], second_intro, songs[2]]
+
     def _news_block(self, boundary):
         played = self.engine.storage.played_news() | self.news_reserved
         candidate = self.news.candidate(played, self.cache.prepare)
@@ -148,6 +180,7 @@ class Planner:
                 self.ready.clear()
                 self.delivered.clear()
                 self.news_reserved.clear()
+                self.special_reserved.clear()
                 self.current = self.tail = None
                 self.end_of_plan = self.clock()
                 self.sequence = 0
@@ -161,7 +194,8 @@ class Planner:
         self.last_fill = self.clock()
         if hasattr(self.cache, 'pin'):
             pools = self.catalogs.programming['stationIds'] + self.catalogs.programming['jingles']
-            self.cache.pin([item['url'] for item in pools] + [config.NEWS_INTRO_URL])
+            special_urls = [config.ITALIAN_BLOCK_INTRO['url']] + [item['url'] for item in config.ITALIAN_BLOCK_TRACKS]
+            self.cache.pin([item['url'] for item in pools] + [config.NEWS_INTRO_URL] + special_urls)
         with self.lock:
             if len(self.ready) >= config.PREPARED_ITEMS:
                 return False
@@ -176,7 +210,19 @@ class Planner:
             self._append(track)
             self._emergency(track)
             return True
-        # Complete the following MUSIC first, so no block can leave a stranded short item.
+        # Scheduled special blocks have priority at their safe boundary and are published
+        # atomically so no normal vinheta/jingle can enter inside the block.
+        special = self._italian_block(boundary)
+        if special is not None:
+            with self.lock:
+                for item in special:
+                    self._append(item)
+            with self.lock:
+                protected = [value['item']['path'] for value in list(self.ready) + list(self.delivered.values())]
+            self.cache.prune(protected + [item['path'] for item in self.emergency])
+            return True
+
+        # Complete the following MUSIC first, so no normal block can leave a stranded short item.
         following = self._music()
         if following is None:
             return False
@@ -297,6 +343,11 @@ class Planner:
             self.engine.started(value['item'], value['checkpoint'])
             if value['item']['type'] == 'NEWS_DROP':
                 self.news_reserved.discard(value['item']['id'])
+            if value['item'].get('special_block_slot'):
+                self.last_special_block_slot = value['item']['special_block_slot']
+                self.engine.storage.put('last_italian_block_slot', self.last_special_block_slot)
+                self.special_reserved.discard(self.last_special_block_slot)
+                log.info('ITALIAN BLOCK started slot=%.0f', self.last_special_block_slot)
             if value['item']['type'] == 'TIME_ANNOUNCEMENT':
                 self.last_time_slot = value['item']['slot']
                 self.engine.storage.put('last_time_slot', self.last_time_slot)
