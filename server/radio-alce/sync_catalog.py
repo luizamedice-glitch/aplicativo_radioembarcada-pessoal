@@ -143,18 +143,32 @@ class Planner:
         if slot is None:
             return None
         try:
-            chosen = self.engine.rng.sample(list(config.ITALIAN_BLOCK_TRACKS), 3)
             intro = self.cache.prepare(config.ITALIAN_BLOCK_INTRO)
-            songs = [self.cache.prepare(item) for item in chosen]
-        except Exception:
-            log.warning('ITALIAN BLOCK unavailable at slot=%.0f; normal programming continues', slot)
+        except Exception as error:
+            log.warning('ITALIAN BLOCK intro unavailable slot=%.0f (%s); normal programming continues',
+                        slot, type(error).__name__)
+            return None
+
+        candidates = list(config.ITALIAN_BLOCK_TRACKS)
+        self.engine.rng.shuffle(candidates)
+        songs = []
+        for item in candidates:
+            try:
+                songs.append(self.cache.prepare(item))
+            except Exception as error:
+                log.warning('ITALIAN BLOCK track unavailable id=%s (%s); trying another',
+                            item['id'], type(error).__name__)
+            if len(songs) == 3:
+                break
+        if len(songs) < 3:
+            log.warning('ITALIAN BLOCK has only %s playable tracks; normal programming continues', len(songs))
             return None
 
         first_intro = dict(intro, special_block_slot=slot)
         second_intro = dict(intro)
         self.special_reserved.add(slot)
         log.info('ITALIAN BLOCK scheduled slot=%.0f tracks=%s', slot,
-                 ','.join(item['title'] for item in chosen))
+                 ','.join(item['title'] for item in songs))
         return [first_intro, songs[0], songs[1], second_intro, songs[2]]
 
     def _news_block(self, boundary):
