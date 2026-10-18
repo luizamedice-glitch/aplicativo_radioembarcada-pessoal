@@ -1,5 +1,7 @@
 import './style.css';
 import { waveform } from './waveform.js';
+// Parallel HLS test stream. Keep the original Icecast relay available for rollback.
+const HLS_URL = 'https://pub-5f56eb102f284301a06abb9ec674001d.r2.dev/alce-test/live.m3u8';
 const audio = document.querySelector('audio');
 const radio = document.querySelector('.radio');
 const button = document.querySelector('.play-pause');
@@ -7,6 +9,7 @@ const badge = document.querySelector('.live-badge');
 const status = document.querySelector('#status');
 const wave = waveform(document.querySelector('canvas'));
 let requested = false, playing = false, attempt = 0, generation = 0, retryTimer, watchdog, loadingTimer;
+let hls;
 const loading = document.querySelector('.loading-program');
 const loadingSeconds = document.querySelector('.loading-seconds');
 function render() {
@@ -27,6 +30,7 @@ function startLoadingTimer() {
 function pause() {
   requested = false; playing = false; generation++; attempt = 0; stopLoadingTimer();
   clearTimeout(retryTimer); retryTimer = undefined; clearTimeout(watchdog);
+  if (hls) { hls.destroy(); hls = undefined; }
   audio.pause(); audio.removeAttribute('src'); audio.load(); render();
 }
 function retry() {
@@ -38,11 +42,44 @@ function armWatchdog() { clearTimeout(watchdog); if (requested) watchdog = setTi
 function connect() {
   if (!requested) return;
   const current = ++generation;
-  audio.src = '/radio/stream'; audio.load(); armWatchdog();
-  audio.play().catch(error => {
+  if (hls) { hls.destroy(); hls = undefined; }
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
+  armWatchdog();
+  function playWhenReady() {
     if (current !== generation || !requested) return;
-    if (error.name === 'NotAllowedError') pause(); else if (error.name !== 'AbortError') retry();
-  });
+    audio.play().catch(error => {
+      if (current !== generation || !requested) return;
+      if (error.name === 'NotAllowedError') pause();
+      else if (error.name !== 'AbortError') retry();
+    });
+  }
+  // On Chrome/Android, hls.js supplies MediaSource playback for the HLS playlist.
+  // Safari and other browsers with native HLS support remain compatible.
+  if (window.Hls?.isSupported()) {
+    const player = new window.Hls({
+      enableWorker: false,
+      lowLatencyMode: false,
+      liveSyncDurationCount: 3,
+      backBufferLength: 30,
+      maxBufferLength: 30,
+    });
+    hls = player;
+    player.on(window.Hls.Events.MANIFEST_PARSED, playWhenReady);
+    player.on(window.Hls.Events.ERROR, (_, data) => {
+      if (!requested || current !== generation || !data.fatal) return;
+      if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+        try { player.recoverMediaError(); armWatchdog(); } catch { retry(); }
+      } else retry();
+    });
+    player.loadSource(HLS_URL);
+    player.attachMedia(audio);
+  } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+    audio.src = HLS_URL;
+    audio.load();
+    playWhenReady();
+  } else retry();
 }
 function play() { if (requested) return; requested = true; startLoadingTimer(); render(); connect(); }
 button.addEventListener('click', () => requested ? pause() : play());
