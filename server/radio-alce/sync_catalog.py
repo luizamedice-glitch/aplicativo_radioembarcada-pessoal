@@ -128,11 +128,14 @@ class Planner:
         log.info('TIME scheduled slot=%.0f at safe boundary=%.0f', item['slot'], boundary)
         return item
 
-    def _special_block_slot(self, boundary):
-        local = datetime.fromtimestamp(boundary, ZoneInfo(config.TIME_ZONE))
+    def _special_block_slot(self, _boundary=None):
+        # Special blocks are clock-driven. Using the forecast end_of_plan here can miss a
+        # slot when Liquidsoap has already prefetched normal items around the scheduled time.
+        now = self.clock()
+        local = datetime.fromtimestamp(now, ZoneInfo(config.TIME_ZONE))
         for hour, minute in config.ITALIAN_BLOCK_TIMES:
             slot = local.replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
-            if (slot <= boundary <= slot + config.ITALIAN_BLOCK_MAX_LATENESS
+            if (slot <= now <= slot + config.ITALIAN_BLOCK_MAX_LATENESS
                     and slot > self.last_special_block_slot
                     and slot not in self.special_reserved):
                 return slot
@@ -212,10 +215,26 @@ class Planner:
             special_urls = [config.ITALIAN_BLOCK_INTRO['url']] + [item['url'] for item in config.ITALIAN_BLOCK_TRACKS]
             self.cache.pin([item['url'] for item in pools] + [config.NEWS_INTRO_URL] + special_urls)
         with self.lock:
-            if len(self.ready) >= config.PREPARED_ITEMS:
-                return False
             initial = self.tail is None
             boundary = self.end_of_plan
+
+        # Clock-driven special blocks are checked before the normal preload-depth guard.
+        # This guarantees that an already-full normal queue cannot suppress a due block.
+        if not initial:
+            special = self._italian_block(boundary)
+            if special is not None:
+                with self.lock:
+                    for item in special:
+                        self._append(item)
+                with self.lock:
+                    protected = [value['item']['path'] for value in list(self.ready) + list(self.delivered.values())]
+                self.cache.prune(protected + [item['path'] for item in self.emergency])
+                return True
+
+        with self.lock:
+            if len(self.ready) >= config.PREPARED_ITEMS:
+                return False
+
         # Network/probe work NEVER holds the ready-queue lock. /next remains immediate.
         if initial:
             track = self._music()
@@ -225,18 +244,6 @@ class Planner:
             self._append(track)
             self._emergency(track)
             return True
-        # Scheduled special blocks have priority at their safe boundary and are published
-        # atomically so no normal vinheta/jingle can enter inside the block.
-        special = self._italian_block(boundary)
-        if special is not None:
-            with self.lock:
-                for item in special:
-                    self._append(item)
-            with self.lock:
-                protected = [value['item']['path'] for value in list(self.ready) + list(self.delivered.values())]
-            self.cache.prune(protected + [item['path'] for item in self.emergency])
-            return True
-
         # Complete the following MUSIC first, so no normal block can leave a stranded short item.
         following = self._music()
         if following is None:
