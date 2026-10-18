@@ -35,7 +35,7 @@ ITALIAN_BLOCK_INTRO = {
 }
 ITALIAN_BLOCK_TRACKS = (
     {'id': 'italiana-tra-te-e-il-mare', 'type': 'MUSIC', 'title': 'Tra te e il mare',
-     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/1.%20Tra%20te%20e%20il%20mare.mp3'},
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/1.Tra%20te%20e%20il%20mare.mp3'},
     {'id': 'italiana-con-te-partiro', 'type': 'MUSIC', 'title': 'Con Te Partirò',
      'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/2.%20Con%20Te%20Partir%C3%B2.mp3'},
     {'id': 'italiana-per-amore', 'type': 'MUSIC', 'title': 'Per Amore',
