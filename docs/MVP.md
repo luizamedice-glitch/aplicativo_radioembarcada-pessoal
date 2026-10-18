@@ -53,7 +53,7 @@ A última configuração válida é salva privadamente; falhas usam a versão sa
 
 O servidor reserva um bloco diário às **16:10, 19:10 e 22:10** no fuso `America/Sao_Paulo`. A entrada ocorre no primeiro boundary seguro após o horário, sem interromper a música em andamento. As faixas ficam na pasta R2 `Bloco - Italianas/`, fora de `music/`, portanto nunca entram no sorteio geral.
 
-O bloco italiano é independente da hora certa. Ele entra no primeiro boundary seguro após **16:10, 19:10 e 22:10**, sem depender das regras de `TIME_ANNOUNCEMENT` e sem ser bloqueado por vinhetas ou jingles da hora cheia.
+O bloco italiano é independente da hora certa. A elegibilidade é determinada pelo **relógio real do servidor** às **16:10, 19:10 e 22:10**, e é verificada antes do limite normal de preload da fila. Assim, uma fila já preenchida com músicas/vinhetas não pode fazer o horário passar despercebido. Depois de ficar elegível, o bloco entra após os itens já entregues ao Liquidsoap, sem interromper o áudio em andamento.
 
 A sequência é: **vinheta do bloco → 2 músicas distintas sorteadas → vinheta do bloco → 1 terceira música distinta → retorno à programação normal**. O bloco é preparado e publicado atomicamente, sem vinhetas, jingles, notícias ou hora certa intercalados internamente. Cada horário é executado no máximo uma vez e o início real do bloco é persistido no SQLite para evitar repetição após reinício.
 
