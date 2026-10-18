@@ -91,6 +91,10 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
     directory = Path('/output')
     directory.mkdir(exist_ok=True)
+    # Fail visibly before connecting if the shared output volume is not writable.
+    probe = directory / '.write-probe'
+    probe.write_bytes(b'')
+    probe.unlink()
     publisher = make_publisher() if os.environ.get('R2_ENABLED') == 'true' else None
     stop = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):

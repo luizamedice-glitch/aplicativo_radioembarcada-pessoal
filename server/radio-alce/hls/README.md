@@ -141,3 +141,18 @@ parar o encoder: a última playlist permanecerá até expirar/remover.
 - Teste HTTP local em tempo real: playlist avançou com segmentos completos;
   média −24,6 dB e pico −21,2 dB. Fonte sintética, sem acesso à EC2.
 - Os mesmos 7 testes passaram dentro da imagem Docker como usuário sem privilégios.
+
+### Correção da primeira ativação
+
+O regex Nginx precisa estar entre aspas por conter `{32}`; sem aspas, a imagem
+interpretava parte do regex como diretiva e reiniciava. `nginx -t` passou após a
+correção. A inicialização do volume também agora é explícita: `init-output` ajusta
+somente o diretório raiz do volume HLS para UID/GID 65534 antes do encoder; o
+preview usa `nocopy` e inicia depois. Evita a corrida de população do volume pela
+imagem Nginx. O encoder verifica escrita antes de conectar, exibindo erro de
+permissão diretamente em vez de repetir conexões sem diagnóstico.
+
+Validação adicional: Compose completo isolado com MP3 sintético, servidor Nginx,
+playlist HTTP e healthcheck passaram. Áudio decodificado do preview: média −24,6 dB,
+pico −21,3 dB. Sete testes Python passaram novamente; build passou. Não foi teste
+na EC2 nem publicação R2. O teste anterior de fonte HTTP contínua permanece válido.
