@@ -49,6 +49,12 @@ No stream central, toda MUSIC recebe `liq_cue_out = duração decodificada - 20 
 A última configuração válida é salva privadamente; falhas usam a versão salva ou deixam a rádio tocando somente músicas, com refresh/retry controlados. IDs de ocorrência distintos permitem repetir peças na fila com cache compartilhado por conteúdo. Media3, sessão contínua e controles externos somente Play/Pause permanecem. O APK padrão não contém MP3 e o workflow existente continua gerando o Artifact. Não há novas telas nem regras comerciais de anúncios.
 
 
+## Bloco Italiano programado
+
+O servidor reserva um bloco diário às **15:00, 19:00 e 22:00** no fuso `America/Sao_Paulo`. A entrada ocorre no primeiro boundary seguro após o horário, sem interromper a música em andamento. As faixas ficam na pasta R2 `Bloco - Italianas/`, fora de `music/`, portanto nunca entram no sorteio geral.
+
+A sequência é fixa na estrutura e aleatória nas músicas: **vinheta do bloco → 2 músicas distintas sorteadas → vinheta do bloco → 1 terceira música distinta → retorno à programação normal**. O bloco é preparado e publicado atomicamente, sem vinhetas, jingles, notícias ou hora certa intercalados internamente. Cada horário é executado no máximo uma vez e o início real do bloco é persistido no SQLite para evitar repetição após reinício.
+
 ## Atualização autorizada — notícias editoriais
 
 RemoteNewsProvider é separado dos provedores musicais/institucionais: RSS Radioagência Nacional → NewsItem → NEWS_INTRO/NEWS_DROP → programação → mesmo Media3/cache/sessão. Intervalo de 60 minutos ativos (pausa/foco/buffering não contam), candidato resolvido antecipadamente, notícias das últimas 24 h com histórico de 100 IDs e crédito da fonte. A página oficial é consultada quando não há enclosure; MP3/redirects devem permanecer em domínios EBC e links indisponíveis são ignorados.
