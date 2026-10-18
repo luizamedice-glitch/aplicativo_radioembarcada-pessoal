@@ -23,6 +23,32 @@ MUSIC_STATION_ID_PAIRS = (
     ("cant stop loving you", "rock internacional"),
     ("tarzan boy", "disco anos 80"),
 )
+# Bloco especial de músicas italianas. A pasta fica fora de music/, então estas faixas
+# nunca entram no sorteio musical normal.
+ITALIAN_BLOCK_TIMES = ((15, 0), (19, 0), (22, 0))
+ITALIAN_BLOCK_MAX_LATENESS = 60 * 60
+ITALIAN_BLOCK_INTRO = {
+    'id': 'vinheta-bloco-italianas',
+    'type': 'STATION_ID',
+    'title': 'Vinheta Bloco Italianas',
+    'url': BASE + '/Bloco%20-%20Italianas/Vinheta_Bloco_Italianas_Masterizada.mp3',
+}
+ITALIAN_BLOCK_TRACKS = (
+    {'id': 'italiana-tra-te-e-il-mare', 'type': 'MUSIC', 'title': 'Tra te e il mare',
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/1.%20Tra%20te%20e%20il%20mare.mp3'},
+    {'id': 'italiana-con-te-partiro', 'type': 'MUSIC', 'title': 'Con Te Partirò',
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/2.%20Con%20Te%20Partir%C3%B2.mp3'},
+    {'id': 'italiana-per-amore', 'type': 'MUSIC', 'title': 'Per Amore',
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/3.%20Per%20Amore.mp3'},
+    {'id': 'italiana-la-solitudine', 'type': 'MUSIC', 'title': 'La solitudine',
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/4.%20La%20solitudine.mp3'},
+    {'id': 'italiana-un-gatto-nel-blu', 'type': 'MUSIC', 'title': 'Un Gatto Nel Blu — Versão Remasterizada',
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/6.%20Un%20Gatto%20Nel%20Blu%20-%20Vers%C3%A3o%20Remasterizada.mp3'},
+    {'id': 'italiana-tornero', 'type': 'MUSIC', 'title': "Tornero'",
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/7.%20Tornero%27.mp3'},
+    {'id': 'italiana-la-dolce-vita', 'type': 'MUSIC', 'title': 'La Dolce Vita',
+     'artist': '', 'url': BASE + '/Bloco%20-%20Italianas/8.%20La%20Dolce%20Vita.mp3'},
+)
 NEWS_INTERVAL = 4 * 60 * 60
 NEWS_MAX_AGE = 24 * 3600
 NEWS_MIN_DURATION = 30
