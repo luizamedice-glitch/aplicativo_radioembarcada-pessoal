@@ -269,6 +269,14 @@ class PlannerTests(EngineFixture):
         self.assertEqual(slot, block[0]['special_block_slot'])
         self.assertIsNone(planner._italian_block(slot))
 
+    def test_italian_block_due_uses_wall_clock_not_forecast_boundary(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        self.now = datetime(2026, 10, 18, 19, 12, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        planner = self.planner()
+        forecast_before_slot = datetime(2026, 10, 18, 19, 5, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        self.assertIsNotNone(planner._italian_block(forecast_before_slot))
+
     def test_italian_block_skips_unavailable_track(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
