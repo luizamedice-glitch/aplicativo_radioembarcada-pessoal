@@ -259,7 +259,8 @@ class PlannerTests(EngineFixture):
         from datetime import datetime
         from zoneinfo import ZoneInfo
         planner = self.planner()
-        slot = datetime(2026, 10, 18, 16, 10, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        slot = datetime(2026, 10, 18, 18, 15, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        self.now = slot
         planner.end_of_plan = slot
         block = planner._italian_block(slot)
         self.assertEqual(5, len(block))
@@ -272,16 +273,17 @@ class PlannerTests(EngineFixture):
     def test_italian_block_due_uses_wall_clock_not_forecast_boundary(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
-        self.now = datetime(2026, 10, 18, 19, 12, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        self.now = datetime(2026, 10, 18, 22, 17, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
         planner = self.planner()
-        forecast_before_slot = datetime(2026, 10, 18, 19, 5, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        forecast_before_slot = datetime(2026, 10, 18, 22, 5, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
         self.assertIsNotNone(planner._italian_block(forecast_before_slot))
 
     def test_italian_block_skips_unavailable_track(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
         planner = self.planner()
-        slot = datetime(2026, 10, 18, 16, 10, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        slot = datetime(2026, 10, 18, 18, 15, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        self.now = slot
         original = planner.cache.prepare
         def prepare(value):
             if value['id'] == 'italiana-tra-te-e-il-mare':
@@ -297,7 +299,21 @@ class PlannerTests(EngineFixture):
         from zoneinfo import ZoneInfo
         planner = self.planner()
         outside = datetime(2026, 10, 18, 16, 30, tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+        self.now = outside
         self.assertIsNone(planner._italian_block(outside))
+
+    def test_italian_schedule_exact_times_and_old_slots_removed(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        self.assertEqual(((18, 15), (22, 15)), config.ITALIAN_BLOCK_TIMES)
+        planner = self.planner()
+        for hour, minute, due in [(16, 40, False), (18, 14, False),
+                                  (18, 15, True), (19, 40, False),
+                                  (22, 14, False), (22, 15, True)]:
+            with self.subTest(hour=hour, minute=minute):
+                self.now = datetime(2026, 10, 18, hour, minute,
+                                    tzinfo=ZoneInfo(config.TIME_ZONE)).timestamp()
+                self.assertEqual(due, planner._special_block_slot() is not None)
 
     def test_timeline_music_insert_music_is_ready_before_boundary(self):
         planner = self.planner()

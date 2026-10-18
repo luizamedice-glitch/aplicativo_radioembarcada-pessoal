@@ -25,7 +25,7 @@ MUSIC_STATION_ID_PAIRS = (
 )
 # Bloco especial de músicas italianas. A pasta fica fora de music/, então estas faixas
 # nunca entram no sorteio musical normal.
-ITALIAN_BLOCK_TIMES = ((16, 40), (19, 40), (22, 40))
+ITALIAN_BLOCK_TIMES = ((18, 15), (22, 15))
 ITALIAN_BLOCK_MAX_LATENESS = 60 * 60
 ITALIAN_BLOCK_INTRO = {
     'id': 'vinheta-bloco-italianas',
