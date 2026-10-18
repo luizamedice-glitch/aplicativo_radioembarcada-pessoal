@@ -13,7 +13,7 @@
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },
       { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-      { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" }
+      { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; media-src 'self' blob: https://pub-5f56eb102f284301a06abb9ec674001d.r2.dev; connect-src 'self' https://pub-5f56eb102f284301a06abb9ec674001d.r2.dev; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" }
     ]}
   ]
 }
