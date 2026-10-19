@@ -305,9 +305,10 @@ class PlannerTests(EngineFixture):
     def test_italian_schedule_exact_times_and_old_slots_removed(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
-        self.assertEqual(((18, 15), (22, 15)), config.ITALIAN_BLOCK_TIMES)
+        self.assertEqual(((14, 50), (18, 15), (22, 15)), config.ITALIAN_BLOCK_TIMES)
         planner = self.planner()
-        for hour, minute, due in [(16, 40, False), (18, 14, False),
+        for hour, minute, due in [(13, 45, False), (14, 49, False), (14, 50, True),
+                                  (16, 40, False), (18, 14, False),
                                   (18, 15, True), (19, 40, False),
                                   (22, 14, False), (22, 15, True)]:
             with self.subTest(hour=hour, minute=minute):
