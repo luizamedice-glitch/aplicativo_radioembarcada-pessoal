@@ -15,13 +15,17 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.MediaSource
 
 /** No catalogue, queue, transition envelope, audio disk cache or saved live position. */
 @UnstableApi
 internal object LiveStreamPlayer {
     fun station(context: Context, id: String, name: String): MediaItem = MediaItem.Builder()
-        .setMediaId(id).setUri(LiveStreamConfiguration.url).setMimeType(MimeTypes.AUDIO_MPEG)
-        .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build())
+        .setMediaId(id).setUri(LiveStreamConfiguration.url).setMimeType(if (LiveStreamConfiguration.isHls) MimeTypes.APPLICATION_M3U8 else MimeTypes.AUDIO_MPEG)
+        .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
+            if (LiveStreamConfiguration.isHls) setTargetOffsetMs(LiveStreamConfiguration.HLS_TARGET_OFFSET_MS)
+        }.setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build())
         .setMediaMetadata(RadioMediaIdentity(context, name).applyTo(MediaMetadata.Builder())
             .setTitle(name).setDisplayTitle(name).setArtist("AO VIVO")
             .setDescription(context.getString(br.com.radioembarcada.R.string.radio_tagline))
@@ -34,7 +38,9 @@ internal object LiveStreamPlayer {
             .setUserAgent("RadioAlce/" + br.com.radioembarcada.BuildConfig.VERSION_NAME)
             .setConnectTimeoutMs(PlaybackConfiguration.CONNECT_TIMEOUT_MS)
             .setReadTimeoutMs(LiveStreamConfiguration.READ_TIMEOUT_MS)
-        val sources = ProgressiveMediaSource.Factory(http, radioExtractors())
+        val sources: MediaSource.Factory = if (LiveStreamConfiguration.isHls) {
+            HlsMediaSource.Factory(http).setLoadErrorHandlingPolicy(LiveStreamLoadErrorPolicy())
+        } else ProgressiveMediaSource.Factory(http, radioExtractors())
             .setContinueLoadingCheckIntervalBytes(LiveStreamConfiguration.LOADING_CHECK_INTERVAL_BYTES)
             .setLoadErrorHandlingPolicy(LiveStreamLoadErrorPolicy())
         return ExoPlayer.Builder(context).setMediaSourceFactory(sources)

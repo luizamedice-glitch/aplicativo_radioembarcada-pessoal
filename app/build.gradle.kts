@@ -23,7 +23,7 @@ require(playbackMode in setOf("STREAM", "LOCAL_FALLBACK")) { "playbackMode aceit
 require(!useLocalMusic || playbackMode == "LOCAL_FALLBACK") { "Assets musicais exigem playbackMode=LOCAL_FALLBACK" }
 val radioStreamUrl = providers.gradleProperty("radioStreamUrl").orNull
     ?: providers.environmentVariable("RADIO_STREAM_URL").orNull
-    ?: "http://15.229.83.121:8000/alce.mp3"
+    ?: "https://pub-5f56eb102f284301a06abb9ec674001d.r2.dev/alce-test/live.m3u8"
 val streamUri = URI(radioStreamUrl)
 require(streamUri.userInfo == null && streamUri.fragment == null && !streamUri.host.isNullOrBlank() &&
     (streamUri.scheme == "https" || (streamUri.scheme == "http" && streamUri.host == "15.229.83.121" &&
@@ -40,8 +40,8 @@ android {
         applicationId = "br.com.radioembarcada"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.6.1"
+        versionCode = 8
+        versionName = "0.7.0"
         buildConfigField("String", "PLAYBACK_MODE", JsonOutput.toJson(playbackMode))
         buildConfigField("String", "RADIO_STREAM_URL", JsonOutput.toJson(radioStreamUrl))
         manifestPlaceholders["radioServiceClass"] = if (playbackMode == "STREAM") ".player.RadioService" else ".player.LocalFallbackRadioService"
@@ -87,6 +87,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
     implementation("androidx.media3:media3-session:1.6.1")
     implementation("androidx.media3:media3-datasource:1.6.1")
     implementation("androidx.media3:media3-database:1.6.1")

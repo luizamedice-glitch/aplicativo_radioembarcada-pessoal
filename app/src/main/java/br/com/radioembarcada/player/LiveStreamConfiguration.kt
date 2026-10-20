@@ -16,6 +16,8 @@ enum class PlaybackMode {
 
 object LiveStreamConfiguration {
     val url: String get() = BuildConfig.RADIO_STREAM_URL
+    val isHls: Boolean get() = java.net.URI(url).path.endsWith(".m3u8", ignoreCase = true)
+    const val HLS_TARGET_OFFSET_MS = 30_000L
     const val MIN_BUFFER_MS = 10_000
     const val MAX_BUFFER_MS = 20_000
     const val START_BUFFER_MS = 1_500

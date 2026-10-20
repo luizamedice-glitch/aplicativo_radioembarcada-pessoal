@@ -11,10 +11,17 @@ programming.json. Agora o modo padrão é **STREAM**:
 
 ```text
 Cloudflare R2 → servidor de playout → Liquidsoap → Icecast
-→ um stream MP3 → ExoPlayer → MediaLibrarySession/MediaLibraryService → UI
+→ encoder HLS → R2 HTTPS → ExoPlayer → MediaLibrarySession/MediaLibraryService → UI
 ```
 
-Stream provisório: **http://15.229.83.121:8000/alce.mp3**.
+Transporte padrão do APK **0.7.0**: HLS HTTPS no R2,
+`https://pub-5f56eb102f284301a06abb9ec674001d.r2.dev/alce-test/live.m3u8`.
+A EC2 continua produzindo a estação: Liquidsoap → Icecast → encoder HLS → R2 → APK.
+Icecast `http://15.229.83.121:8000/alce.mp3` permanece disponível, sem mudança no servidor.
+O endereço `r2.dev` é provisório para validação; substituir por domínio próprio antes
+de distribuição ampla. Configure `-PradioStreamUrl=https://hls.seudominio.com/alce-test/live.m3u8`
+para gerar o APK com o domínio definitivo. Não há credenciais R2 no aplicativo.
+
 Todos os celulares recebem o mesmo sinal central, com pequena diferença de buffer.
 O IP é provisório; futuramente usar domínio + HTTPS. O servidor em
 `server/radio-alce/` agora inclui programação global, histórico persistente,
@@ -69,8 +76,11 @@ Player e sessão não são recriados a cada comando. Não existe cache de disco 
 stream: reutilizar bytes de uma sessão anterior atrasaria a transmissão.
 
 `LiveStreamConfiguration` centraliza buffer mínimo **10 s**, máximo **20 s**, início
-**1,5 s** e rebuffer **5 s**; não usa o buffer de 90 s do fallback musical. A fonte
-progressiva é ao vivo, sem duração falsa, seek ou navegação. Falhas transitórias são
+**1,5 s** e rebuffer **5 s**; não usa o buffer de 90 s do fallback musical. A fonte padrão usa `HlsMediaSource` e o módulo `media3-exoplayer-hls:1.6.1`,
+com offset desejado de 30 s para os segmentos de 10 s. Esse offset não é uma
+promessa de latência total. A fonte progressiva permanece disponível somente
+quando a URL de build aponta explicitamente para MP3 (rollback), sem troca automática.
+Ambas são expostas como rádio ao vivo, sem duração falsa, seek ou navegação. Falhas transitórias são
 recuperadas dentro do carregador Media3 com backoff limitado, sem encerrar a fonte
 a cada três erros: isso mantém BUFFERING, foreground e wake locks durante a
 recuperação. O Media3 consome primeiro o áudio em buffer antes de reabrir o sinal
@@ -522,3 +532,16 @@ Nenhum arquivo de `uploads-zip/` é removido. Para rollback, o mapa permite copi
 os destinos de volta às origens e republicar o catálogo anterior com versão maior.
 Após excluir faixas na curadoria, execute `operation=music` para atualizar o JSON;
 não reexecute `import_zip` sobre fontes antigas, pois elas podem ser importadas novamente.
+
+### Validação do APK HLS 0.7.0
+
+O módulo HLS usa a mesma versão 1.6.1 dos demais módulos Media3. Play/Pause,
+foreground, identidade fixa, restrições de comandos e reconexão permanecem no
+mesmo serviço. Não há troca automática para EC2 quando o R2 falha. Retomar cria
+uma fonte nova na posição padrão ao vivo; não restaura posição antiga.
+
+Antes de distribuir, testar no aparelho: Play/Pause, pausa longa, tela bloqueada,
+15–30 minutos em segundo plano, troca Wi-Fi/dados móveis e Bluetooth/Android Auto.
+O endpoint de desenvolvimento está sujeito a limites; adotar domínio HTTPS próprio
+para produção. Uma alteração de domínio requer novo build via `radioStreamUrl`.
+O teste de áudio remoto não substitui essa validação física no dispositivo.

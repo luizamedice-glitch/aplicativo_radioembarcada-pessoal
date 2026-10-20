@@ -52,6 +52,13 @@ class LiveStreamSessionTest {
         assertEquals(LiveStreamConfiguration.url, item.localConfiguration!!.uri.toString())
         assertEquals(1f, item.liveConfiguration.minPlaybackSpeed, 0f)
     }
+    @Test fun defaultStreamIsHttpsHlsWithLiveOffset() {
+        val item = LiveStreamPlayer.station(RuntimeEnvironment.getApplication(), "alce", "Rádio Alce")
+        assertTrue(LiveStreamConfiguration.isHls)
+        assertEquals("https", item.localConfiguration!!.uri.scheme)
+        assertEquals(androidx.media3.common.MimeTypes.APPLICATION_M3U8, item.localConfiguration!!.mimeType)
+        assertEquals(30_000L, item.liveConfiguration.targetOffsetMs)
+    }
     @Test fun creatingStreamServiceDoesNotInitializeAnyLocalProgramming() {
         val service = Robolectric.buildService(RadioService::class.java).create()
         try {
