@@ -1,43 +1,26 @@
 <!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0c0e">
-  <title>Painel Rádio Alce</title>
-  <style>
-    :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b0c0e;color:#f5f5f3}
-    *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#0b0c0e,#111318)}
-    main{max-width:860px;margin:0 auto;padding:22px 18px 40px}
-    header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px}
-    h1{font-size:24px;margin:0 0 4px}.muted{color:#9ca3af;font-size:13px}.status{font-size:12px;padding:7px 10px;border-radius:999px;background:#17351f;color:#8be89c}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-    .card,.panel{background:#17191d;border:1px solid #272a30;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
-    .card{padding:18px}.value{font-size:38px;font-weight:750;letter-spacing:-.03em}.label{font-size:13px;color:#a4a9b0;margin-top:4px}
-    .panel{margin-top:16px;padding:16px}h2{font-size:16px;margin:0 0 12px}
-    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 4px;border-bottom:1px solid #2a2d32;font-size:14px}th{color:#9ca3af;font-weight:600}
-    .error{display:none;background:#351717;color:#ff9a9a;padding:12px 14px;border-radius:14px;margin-bottom:14px}.error.show{display:block}
-    footer{color:#747b84;font-size:12px;margin-top:14px;line-height:1.5}
-    @media(min-width:700px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.value{font-size:34px}}
-  </style>
-</head>
-<body>
-<main>
-  <header>
-    <div><h1>Rádio Alce</h1><div class="muted">Painel de acessos</div></div>
-    <div id="status" class="status">Atualizando...</div>
-  </header>
-  <div id="error" class="error"></div>
-  <section class="grid">
-    <div class="card"><div id="listeners" class="value">—</div><div class="label">ouvintes agora</div></div>
-    <div class="card"><div id="peak" class="value">—</div><div class="label">pico do Icecast</div></div>
-    <div class="card"><div id="connections" class="value">—</div><div class="label">conexões hoje</div></div>
-    <div class="card"><div id="unique" class="value">—</div><div class="label">IPs únicos hoje</div></div>
-  </section>
-  <section class="panel"><h2>Últimos 7 dias</h2><table><thead><tr><th>Data</th><th>Conexões</th></tr></thead><tbody id="daily"></tbody></table></section>
-  <section class="panel"><h2>Conexões recentes</h2><table><thead><tr><th>Horário</th><th>Dispositivo</th></tr></thead><tbody id="recent"></tbody></table>
-  <footer>Conexões podem incluir reconexões automáticas do navegador ou aplicativo e não equivalem necessariamente a pessoas únicas.</footer></section>
-</main>
-<script type="module" src="/src/main.js"></script>
-</body>
-</html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0c0e">
+<title>Painel Rádio Alce</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b0c0e;color:#f5f5f3}
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#0b0c0e,#111318)}
+main{max-width:860px;margin:0 auto;padding:22px 18px 40px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px}
+h1{font-size:24px;margin:0 0 4px}.muted{color:#9ca3af;font-size:13px}.status{font-size:12px;padding:7px 10px;border-radius:999px;background:#17351f;color:#8be89c}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card,.panel{background:#17191d;border:1px solid #272a30;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.card{padding:18px}.value{font-size:38px;font-weight:750;letter-spacing:-.03em}.label{font-size:13px;color:#a4a9b0;margin-top:4px}
+.panel{margin-top:16px;padding:16px}h2{font-size:16px;margin:0 0 12px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 4px;border-bottom:1px solid #2a2d32;font-size:14px}th{color:#9ca3af;font-weight:600}
+.error{display:none;background:#351717;color:#ff9a9a;padding:12px 14px;border-radius:14px;margin-bottom:14px}.error.show{display:block}
+@media(min-width:700px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.value{font-size:34px}}
+</style></head>
+<body><main>
+<header><div><h1>Rádio Alce</h1><div class="muted">Monitoramento HLS · R2</div></div><div id="status" class="status">Atualizando...</div></header>
+<div id="error" class="error"></div>
+<section class="grid">
+<div class="card"><div id="estimated" class="value">—</div><div class="label">estimativa agora</div></div>
+<div class="card"><div id="requests5m" class="value">—</div><div class="label">requisições de segmentos · 5 min</div></div>
+<div class="card"><div id="requestsToday" class="value">—</div><div class="label">requisições hoje</div></div>
+<div class="card"><div id="downloadToday" class="value">—</div><div class="label">download hoje</div></div>
+</section>
+<section class="panel"><h2>Últimos 7 dias</h2><table><thead><tr><th>Data</th><th>Requisições</th></tr></thead><tbody id="daily"></tbody></table></section>
+</main><script type="module" src="/src/main.js"></script></body></html>
