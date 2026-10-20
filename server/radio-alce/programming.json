@@ -1,6 +1,6 @@
 {
   "stationId": "alce",
-  "version": 12,
+  "version": 13,
   "rules": {
     "songsBetweenInsertions": 3,
     "alternateInsertionTypes": true,
@@ -116,6 +116,24 @@
       "type": "STATION_ID",
       "title": "Rock Energético — Rádio Alce",
       "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_Rock_Energetico.mp3"
+    },
+    {
+      "id": "vinheta-alce-01-masterizada",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 01 Masterizada",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_01_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-02-masterizada",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 02 Masterizada",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_02_Masterizada.mp3"
+    },
+    {
+      "id": "vinheta-alce-03-masterizada",
+      "type": "STATION_ID",
+      "title": "Vinheta Alce 03 Masterizada",
+      "url": "https://pub-e38948fd737d4d969bb4e65eebed0249.r2.dev/Vinheta_Alce_03_Masterizada.mp3"
     }
   ],
   "jingles": [
