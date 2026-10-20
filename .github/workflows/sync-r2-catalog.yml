@@ -7,7 +7,7 @@ on:
         description: Catálogo musical, peças aprovadas ou inventário
         type: choice
         default: music
-        options: [music, programming, jingles, inventory, import_zip, flatten_music, restore_programming]
+        options: [music, programming, inventory, import_zip, flatten_music, restore_programming]
 
 concurrency:
   group: r2-library-publication
@@ -179,60 +179,101 @@ jobs:
           PY
 
   programming:
-    name: Publicar peças aprovadas
-    if: ${{ always() && needs.r2_access.result == 'success' && (github.event.inputs.operation == 'programming' || github.event.inputs.operation == 'jingles') }}
+    name: Publicar programming.json oficial
+    if: ${{ always() && needs.r2_access.result == 'success' && github.event.inputs.operation == 'programming' }}
     needs: r2_access
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      ADDITIONS_FILE: ${{ inputs.operation == 'jingles' && 'scripts/jingle-additions.json' || 'scripts/station-id-additions.json' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: auto
+      PROGRAMMING_FILE: server/radio-alce/programming.json
     steps:
       - uses: actions/checkout@v4
-      - name: Testar merge e validar arquivos no bucket
+
+      - name: Validar manifesto oficial e arquivos no R2
         run: |
-          python3 -m unittest discover -s scripts -p 'test_update_r2_programming.py' -v
           python3 - <<'PYTHON'
           import json, os, subprocess
           from urllib.parse import unquote, urlsplit
+
+          path = os.environ['PROGRAMMING_FILE']
+          data = json.load(open(path, encoding='utf-8'))
+
+          assert data.get('stationId') == 'alce', 'stationId inválido'
+          assert isinstance(data.get('version'), int), 'version inválida'
+          assert isinstance(data.get('stationIds'), list) and data['stationIds'], 'stationIds vazio'
+          assert isinstance(data.get('jingles'), list) and data['jingles'], 'jingles vazio'
+
+          ids = set()
+          urls = set()
           endpoint = 'https://' + os.environ['R2_ACCOUNT_ID'] + '.r2.cloudflarestorage.com'
-          for item in json.load(open(os.environ['ADDITIONS_FILE'])):
-              result = subprocess.check_output(['aws', 's3api', 'head-object', '--bucket', os.environ['R2_BUCKET'],
-                  '--key', unquote(urlsplit(item['url']).path.lstrip('/')), '--endpoint-url', endpoint])
-              assert json.loads(result)['ContentLength'] > 0
-              print('Audio available: ' + item['id'])
+
+          for pool_name in ('stationIds', 'jingles'):
+              for item in data[pool_name]:
+                  assert item.get('type') in ('STATION_ID', 'JINGLE'), 'type inválido'
+                  assert item.get('id') and item.get('title') and item.get('url'), 'item incompleto'
+                  assert item['id'] not in ids, 'ID duplicado: ' + item['id']
+                  assert item['url'] not in urls, 'URL duplicada: ' + item['url']
+                  ids.add(item['id'])
+                  urls.add(item['url'])
+
+                  url = urlsplit(item['url'])
+                  assert url.scheme == 'https'
+                  assert url.hostname == 'pub-e38948fd737d4d969bb4e65eebed0249.r2.dev'
+                  assert not url.query and not url.fragment and url.path.lower().endswith('.mp3')
+
+                  key = unquote(url.path.lstrip('/'))
+                  result = subprocess.check_output([
+                      'aws','s3api','head-object',
+                      '--bucket', os.environ['R2_BUCKET'],
+                      '--key', key,
+                      '--endpoint-url', endpoint
+                  ])
+                  assert json.loads(result)['ContentLength'] > 0
+                  print('Audio available:', item['id'])
+
+          print(f"Manifesto válido: versão {data['version']}, {len(data['stationIds'])} vinhetas, {len(data['jingles'])} jingles")
           PYTHON
+
       - name: Baixar configuração atual e guardar backup
         run: |
-          aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-before.json \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          if aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-before.json --endpoint-url "$ENDPOINT"; then
+            echo "Backup remoto obtido."
+          else
+            echo "::warning::programming.json remoto não encontrado; primeira publicação."
+            printf '{}\n' > /tmp/programming-before.json
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: programming-backup
           path: /tmp/programming-before.json
           retention-days: 30
           if-no-files-found: error
-      - name: Mesclar preservando regras e peças existentes
-        run: |
-          python3 scripts/update_r2_programming.py --current /tmp/programming-before.json \
-            --additions "$ADDITIONS_FILE" --output /tmp/programming.json
-      - name: Publicar e conferir programação
+
+      - name: Publicar manifesto oficial no R2
         run: |
           ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-check.json --endpoint-url "$ENDPOINT"
-          cmp /tmp/programming-before.json /tmp/programming-check.json || { echo 'Configuração remota mudou; execute novamente.'; exit 1; }
-          aws s3 cp /tmp/programming.json "s3://${R2_BUCKET}/programming.json" \
-            --content-type 'application/json; charset=utf-8' --cache-control 'no-cache, max-age=0' --endpoint-url "$ENDPOINT"
+          aws s3 cp "$PROGRAMMING_FILE" "s3://${R2_BUCKET}/programming.json" \
+            --content-type 'application/json; charset=utf-8' \
+            --cache-control 'no-cache, max-age=0' \
+            --endpoint-url "$ENDPOINT"
+
+      - name: Conferir publicação byte a byte
+        run: |
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           aws s3 cp "s3://${R2_BUCKET}/programming.json" /tmp/programming-published.json --endpoint-url "$ENDPOINT"
-          cmp /tmp/programming.json /tmp/programming-published.json
+          cmp "$PROGRAMMING_FILE" /tmp/programming-published.json
           python3 - <<'PYTHON'
           import json, os
-          data = json.load(open('/tmp/programming-published.json'))
+          data = json.load(open('/tmp/programming-published.json', encoding='utf-8'))
           text = f"Programming version {data['version']}: {len(data['stationIds'])} station IDs, {len(data['jingles'])} jingles."
           print(text)
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f: f.write(text + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              f.write(text + '\n')
           PYTHON
 
   inventory:
